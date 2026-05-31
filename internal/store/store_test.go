@@ -53,13 +53,13 @@ func TestLayeredResolveAndShadow(t *testing.T) {
 	dir := t.TempDir()
 	project := filepath.Join(dir, "project", "store")
 	global := filepath.Join(dir, "global", "store")
-	writeFile(t, fileFor(global, "shared"), "global version")
-	writeFile(t, fileFor(global, "globalonly"), "g")
-	writeFile(t, fileFor(project, "shared"), "project version")
+	writeFile(t, fileFor(global, TypePrompt, "shared"), "global version")
+	writeFile(t, fileFor(global, TypePrompt, "globalonly"), "g")
+	writeFile(t, fileFor(project, TypePrompt, "shared"), "project version")
 
 	s := &Store{projectStore: project, globalStore: global}
 
-	a, err := s.Resolve("shared")
+	a, err := s.Resolve(TypePrompt, "shared")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestLayeredResolveAndShadow(t *testing.T) {
 		t.Errorf("shadow failed: body=%q layer=%q", a.Body, a.Layer)
 	}
 
-	g, err := s.Resolve("globalonly")
+	g, err := s.Resolve(TypePrompt, "globalonly")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,17 +75,64 @@ func TestLayeredResolveAndShadow(t *testing.T) {
 		t.Errorf("layer = %q", g.Layer)
 	}
 
-	if _, err := s.Resolve("missing"); err == nil {
+	if _, err := s.Resolve(TypePrompt, "missing"); err == nil {
 		t.Errorf("expected not found")
 	}
 
-	list, err := s.List(false, "")
+	list, err := s.List(TypePrompt, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(list) != 2 { // shared (project) + globalonly, not the shadowed global shared
 		t.Errorf("list len = %d: %+v", len(list), list)
 	}
+}
+
+func TestTypedStorage(t *testing.T) {
+	dir := t.TempDir()
+	s := &Store{globalStore: filepath.Join(dir, "store")}
+
+	// Save one of each type to the global store.
+	for _, typ := range []Type{TypePrompt, TypeAgent, TypeCommand, TypeSkill} {
+		if _, err := s.Save(typ, "thing", Scaffold("thing", typ), true); err != nil {
+			t.Fatalf("save %s: %v", typ, err)
+		}
+	}
+
+	// Each resolves independently and lands in the right subdir.
+	for _, typ := range []Type{TypePrompt, TypeAgent, TypeCommand, TypeSkill} {
+		a, err := s.Resolve(typ, "thing")
+		if err != nil {
+			t.Fatalf("resolve %s: %v", typ, err)
+		}
+		if a.Type != typ {
+			t.Errorf("type = %q want %q", a.Type, typ)
+		}
+		wantSub := typ.subdir()
+		if wantSub != "" && !contains(a.Path, wantSub) {
+			t.Errorf("%s path %q missing subdir %q", typ, a.Path, wantSub)
+		}
+	}
+
+	// List all types finds four; filtered finds one.
+	all, err := s.List("", true, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 4 {
+		t.Errorf("list all = %d want 4", len(all))
+	}
+	agents, err := s.List(TypeAgent, true, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(agents) != 1 || agents[0].Type != TypeAgent {
+		t.Errorf("list agents = %+v", agents)
+	}
+}
+
+func contains(s, sub string) bool {
+	return filepath.Base(filepath.Dir(s)) == sub
 }
 
 func TestReadPartial(t *testing.T) {

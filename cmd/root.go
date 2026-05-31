@@ -32,6 +32,11 @@ func mustStore() (*store.Store, error) {
 	return store.New()
 }
 
+// addTypeFlag registers the shared --type/-t flag on a command.
+func addTypeFlag(cmd *cobra.Command, v *string) {
+	cmd.Flags().StringVarP(v, "type", "t", "prompt", "artifact type: prompt|agent|command|skill")
+}
+
 // openEditor opens path in the user's editor ($VISUAL, then $EDITOR, then vi),
 // wired to the controlling terminal.
 func openEditor(path string) error {

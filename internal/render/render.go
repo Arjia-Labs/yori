@@ -16,8 +16,8 @@ import (
 type Resolver interface {
 	// ReadPartial loads a partial's bytes (by base name, no extension).
 	ReadPartial(name string) ([]byte, error)
-	// Resolve loads an artifact by name (used to follow `extends`).
-	Resolve(name string) (*store.Artifact, error)
+	// Resolve loads a typed artifact by name (used to follow `extends`).
+	Resolve(typ store.Type, name string) (*store.Artifact, error)
 }
 
 // inputRef matches a reference to the `input` variable inside a Liquid
@@ -105,7 +105,7 @@ func layout(a *store.Artifact, resolver Resolver, visited map[string]bool) (stri
 	}
 	visited[a.Name] = true
 
-	base, err := resolver.Resolve(a.Extends)
+	base, err := resolver.Resolve(a.Type, a.Extends)
 	if err != nil {
 		return "", fmt.Errorf("%s extends %s: %w", a.Name, a.Extends, err)
 	}

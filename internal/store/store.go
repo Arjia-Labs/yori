@@ -63,19 +63,19 @@ func (s *Store) StoreDir(global bool) (string, error) {
 	return s.projectStore, nil
 }
 
-// fileFor returns the file path for an artifact name within a store dir.
-func fileFor(dir, name string) string {
-	return filepath.Join(dir, name+".md")
+// fileFor returns the file path for a typed artifact within a store dir.
+func fileFor(dir string, typ Type, name string) string {
+	return filepath.Join(dir, typ.subdir(), name+".md")
 }
 
 // FilePath returns the on-disk path an artifact would have in the given scope,
 // without requiring it to exist.
-func (s *Store) FilePath(name string, global bool) (string, error) {
+func (s *Store) FilePath(typ Type, name string, global bool) (string, error) {
 	dir, err := s.StoreDir(global)
 	if err != nil {
 		return "", err
 	}
-	return fileFor(dir, name), nil
+	return fileFor(dir, typ, name), nil
 }
 
 // Exists reports whether a file exists at path.
@@ -84,10 +84,10 @@ func Exists(path string) bool {
 	return err == nil
 }
 
-// Resolve loads the highest-priority artifact with the given name.
-func (s *Store) Resolve(name string) (*Artifact, error) {
+// Resolve loads the highest-priority artifact of the given type and name.
+func (s *Store) Resolve(typ Type, name string) (*Artifact, error) {
 	for _, l := range s.layers() {
-		path := fileFor(l.dir, name)
+		path := fileFor(l.dir, typ, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -100,9 +100,10 @@ func (s *Store) Resolve(name string) (*Artifact, error) {
 			return nil, err
 		}
 		a.Layer = l.name
+		a.Type = typ
 		return a, nil
 	}
-	return nil, fmt.Errorf("%q: %w", name, ErrNotFound)
+	return nil, fmt.Errorf("%s %q: %w", typ, name, ErrNotFound)
 }
 
 // ReadPartial resolves a partial by base name through the layered stores.
@@ -124,52 +125,69 @@ func (s *Store) ReadPartial(name string) ([]byte, error) {
 	return nil, fmt.Errorf("partial %q: %w", base, ErrNotFound)
 }
 
-// List returns artifacts across layers. When global is true, only the global
-// layer is listed. Project artifacts shadow same-named global ones. tag, if
-// non-empty, filters to artifacts carrying that tag.
-func (s *Store) List(global bool, tag string) ([]*Artifact, error) {
-	seen := map[string]bool{}
-	var out []*Artifact
+// List returns artifacts across layers. An empty typ lists every type; a
+// specific typ filters to it. When global is true, only the global layer is
+// listed. Higher layers shadow same-(type,name) artifacts in lower ones. tag,
+// if non-empty, filters to artifacts carrying that tag.
+func (s *Store) List(typ Type, global bool, tag string) ([]*Artifact, error) {
+	types := AllTypes
+	if typ != "" {
+		types = []Type{typ}
+	}
 
 	ls := s.layers()
 	if global {
 		ls = []layer{{name: "global", dir: s.globalStore}}
 	}
 
-	for _, l := range ls {
-		entries, err := os.ReadDir(l.dir)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, err
-		}
-		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-				continue
-			}
-			name := strings.TrimSuffix(e.Name(), ".md")
-			if seen[name] {
-				continue // shadowed by a higher layer
-			}
-			seen[name] = true
+	seen := map[string]bool{} // key: "<type>/<name>"
+	var out []*Artifact
 
-			data, err := os.ReadFile(filepath.Join(l.dir, e.Name()))
+	for _, t := range types {
+		for _, l := range ls {
+			dir := filepath.Join(l.dir, t.subdir())
+			entries, err := os.ReadDir(dir)
 			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
 				return nil, err
 			}
-			a, err := parseArtifact(data, filepath.Join(l.dir, e.Name()))
-			if err != nil {
-				return nil, err
+			for _, e := range entries {
+				if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+					continue
+				}
+				name := strings.TrimSuffix(e.Name(), ".md")
+				key := string(t) + "/" + name
+				if seen[key] {
+					continue // shadowed by a higher layer
+				}
+				seen[key] = true
+
+				path := filepath.Join(dir, e.Name())
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return nil, err
+				}
+				a, err := parseArtifact(data, path)
+				if err != nil {
+					return nil, err
+				}
+				a.Layer = l.name
+				a.Type = t
+				if tag != "" && !hasTag(a, tag) {
+					continue
+				}
+				out = append(out, a)
 			}
-			a.Layer = l.name
-			if tag != "" && !hasTag(a, tag) {
-				continue
-			}
-			out = append(out, a)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		return out[i].Name < out[j].Name
+	})
 	return out, nil
 }
 
@@ -182,32 +200,32 @@ func hasTag(a *Artifact, tag string) bool {
 	return false
 }
 
-// Save writes an artifact's content to the store for the given scope.
-func (s *Store) Save(name string, content []byte, global bool) (string, error) {
+// Save writes a typed artifact's content to the store for the given scope.
+func (s *Store) Save(typ Type, name string, content []byte, global bool) (string, error) {
 	dir, err := s.StoreDir(global)
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	path := fileFor(dir, typ, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
-	path := fileFor(dir, name)
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		return "", err
 	}
 	return path, nil
 }
 
-// Delete removes an artifact from the store for the given scope.
-func (s *Store) Delete(name string, global bool) error {
+// Delete removes a typed artifact from the store for the given scope.
+func (s *Store) Delete(typ Type, name string, global bool) error {
 	dir, err := s.StoreDir(global)
 	if err != nil {
 		return err
 	}
-	path := fileFor(dir, name)
+	path := fileFor(dir, typ, name)
 	if err := os.Remove(path); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("%q: %w", name, ErrNotFound)
+			return fmt.Errorf("%s %q: %w", typ, name, ErrNotFound)
 		}
 		return err
 	}

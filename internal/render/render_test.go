@@ -31,14 +31,14 @@ func (r resolverWithArtifacts) ReadPartial(name string) ([]byte, error) {
 	return r.partials.ReadPartial(name)
 }
 
-func (r resolverWithArtifacts) Resolve(name string) (*store.Artifact, error) {
+func (r resolverWithArtifacts) Resolve(_ store.Type, name string) (*store.Artifact, error) {
 	if a, ok := r.artifacts[name]; ok {
 		return a, nil
 	}
 	return nil, fmt.Errorf("no artifact %q", name)
 }
 
-func (f fakeResolver) Resolve(name string) (*store.Artifact, error) {
+func (f fakeResolver) Resolve(_ store.Type, name string) (*store.Artifact, error) {
 	return nil, fmt.Errorf("no artifact %q", name)
 }
 

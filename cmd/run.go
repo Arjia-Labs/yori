@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rovak/yori/internal/render"
+	"github.com/rovak/yori/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -36,12 +37,16 @@ Variables come from (highest priority first):
 		if p.name == "" {
 			return fmt.Errorf("missing artifact name")
 		}
+		typ, err := store.ParseType(p.typ)
+		if err != nil {
+			return err
+		}
 
 		s, err := mustStore()
 		if err != nil {
 			return err
 		}
-		art, err := s.Resolve(p.name)
+		art, err := s.Resolve(typ, p.name)
 		if err != nil {
 			return err
 		}
@@ -77,6 +82,7 @@ Variables come from (highest priority first):
 
 type runParams struct {
 	name string
+	typ  string
 	vars map[string]string
 	file string
 }
@@ -86,6 +92,15 @@ func parseRunArgs(args []string) (runParams, error) {
 	p := runParams{vars: map[string]string{}}
 	for i := 0; i < len(args); i++ {
 		tok := args[i]
+		// Short -t/--type for the artifact type.
+		if tok == "-t" {
+			val, ok := takeNext(args, &i)
+			if !ok {
+				return p, fmt.Errorf("-t requires a type")
+			}
+			p.typ = val
+			continue
+		}
 		if !strings.HasPrefix(tok, "--") {
 			if p.name == "" {
 				p.name = tok
@@ -102,6 +117,15 @@ func parseRunArgs(args []string) (runParams, error) {
 		}
 		// Reserved flags.
 		switch key {
+		case "type":
+			if !hasVal {
+				val, hasVal = takeNext(args, &i)
+			}
+			if !hasVal {
+				return p, fmt.Errorf("--type requires a value")
+			}
+			p.typ = val
+			continue
 		case "global":
 			continue // store-targeting not meaningful for read; accepted, ignored
 		case "file":

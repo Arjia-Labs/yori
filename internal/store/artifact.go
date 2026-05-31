@@ -9,6 +9,50 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Type is an artifact kind. Each non-prompt type lives in its own subfolder
+// of a store; prompts live at the store root.
+type Type string
+
+const (
+	TypePrompt  Type = "prompt"
+	TypeAgent   Type = "agent"
+	TypeCommand Type = "command"
+	TypeSkill   Type = "skill"
+)
+
+// AllTypes lists every artifact type in display order.
+var AllTypes = []Type{TypePrompt, TypeAgent, TypeCommand, TypeSkill}
+
+// subdir returns the store subdirectory for a type ("" for prompts).
+func (t Type) subdir() string {
+	switch t {
+	case TypeAgent:
+		return "agents"
+	case TypeCommand:
+		return "commands"
+	case TypeSkill:
+		return "skills"
+	default:
+		return ""
+	}
+}
+
+// ParseType maps a user-supplied string (singular or plural) to a Type.
+func ParseType(s string) (Type, error) {
+	switch s {
+	case "", "prompt", "prompts":
+		return TypePrompt, nil
+	case "agent", "agents":
+		return TypeAgent, nil
+	case "command", "commands", "cmd":
+		return TypeCommand, nil
+	case "skill", "skills":
+		return TypeSkill, nil
+	default:
+		return "", fmt.Errorf("unknown type %q (want prompt|agent|command|skill)", s)
+	}
+}
+
 // Var is a declared template variable: an optional default and description.
 type Var struct {
 	Default     string `yaml:"default,omitempty"`
@@ -27,6 +71,7 @@ type Artifact struct {
 	Body  string `yaml:"-"` // template body, frontmatter stripped
 	Path  string `yaml:"-"` // resolved file path on disk
 	Layer string `yaml:"-"` // "project" or "global"
+	Type  Type   `yaml:"-"` // derived from the file's location
 }
 
 var frontmatterDelim = []byte("---")
@@ -108,17 +153,39 @@ func (a *Artifact) Render() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Scaffold returns starter content for `yori add`.
-func Scaffold(name string) []byte {
-	return []byte("---\n" +
+// Scaffold returns starter content for `yori add`, tailored to the type.
+func Scaffold(name string, typ Type) []byte {
+	header := "---\n" +
 		"name: " + name + "\n" +
 		"description: \n" +
-		"tags: []\n" +
-		"vars:\n" +
-		"  # example:\n" +
-		"  #   default: neutral\n" +
-		"  #   description: voice of the response\n" +
-		"---\n\n" +
-		"Write your prompt here. Use {{ variable }} for variables\n" +
-		"and {{ input }} for piped stdin.\n")
+		"tags: []\n"
+	switch typ {
+	case TypeAgent:
+		return []byte(header +
+			"model: \n" +
+			"vars: {}\n" +
+			"---\n\n" +
+			"You are " + name + ". Describe the agent's role, tools, and constraints.\n" +
+			"Use {{ variable }} for parameters and {{ input }} for the task.\n")
+	case TypeCommand:
+		return []byte(header +
+			"vars: {}\n" +
+			"---\n\n" +
+			"# /" + name + " command\n\n" +
+			"Describe what this slash command does. {{ input }} is the invocation argument.\n")
+	case TypeSkill:
+		return []byte(header +
+			"---\n\n" +
+			"# " + name + " skill\n\n" +
+			"Describe when to use this skill and the steps it performs.\n")
+	default:
+		return []byte(header +
+			"vars:\n" +
+			"  # example:\n" +
+			"  #   default: neutral\n" +
+			"  #   description: voice of the response\n" +
+			"---\n\n" +
+			"Write your prompt here. Use {{ variable }} for variables\n" +
+			"and {{ input }} for piped stdin.\n")
+	}
 }

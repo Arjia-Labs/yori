@@ -7,7 +7,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var addGlobal bool
+var (
+	addGlobal bool
+	addType   string
+)
 
 var addCmd = &cobra.Command{
 	Use:   "add <name>",
@@ -15,18 +18,22 @@ var addCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
+		typ, err := store.ParseType(addType)
+		if err != nil {
+			return err
+		}
 		s, err := mustStore()
 		if err != nil {
 			return err
 		}
-		path, err := s.FilePath(name, addGlobal)
+		path, err := s.FilePath(typ, name, addGlobal)
 		if err != nil {
 			return err
 		}
 		if store.Exists(path) {
 			return fmt.Errorf("%q already exists at %s; use `yori edit`", name, path)
 		}
-		if _, err := s.Save(name, store.Scaffold(name), addGlobal); err != nil {
+		if _, err := s.Save(typ, name, store.Scaffold(name, typ), addGlobal); err != nil {
 			return err
 		}
 		if err := openEditor(path); err != nil {
@@ -39,5 +46,6 @@ var addCmd = &cobra.Command{
 
 func init() {
 	addCmd.Flags().BoolVar(&addGlobal, "global", false, "save to the global store")
+	addTypeFlag(addCmd, &addType)
 	rootCmd.AddCommand(addCmd)
 }
