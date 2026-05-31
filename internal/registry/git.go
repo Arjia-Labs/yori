@@ -74,6 +74,12 @@ func SetRemote(dir, url string) error {
 	return err
 }
 
+// HasCommits reports whether the repo at dir has at least one commit.
+func HasCommits(dir string) bool {
+	_, err := git(dir, "rev-parse", "HEAD")
+	return err == nil
+}
+
 // HasUpstream reports whether the current branch has an upstream set.
 func HasUpstream(dir string) bool {
 	_, err := git(dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")

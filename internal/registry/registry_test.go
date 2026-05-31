@@ -96,3 +96,55 @@ func fileExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
 }
+
+func TestPushRoundTrip(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	for _, kv := range [][2]string{
+		{"GIT_AUTHOR_NAME", "t"}, {"GIT_AUTHOR_EMAIL", "t@t"},
+		{"GIT_COMMITTER_NAME", "t"}, {"GIT_COMMITTER_EMAIL", "t@t"},
+	} {
+		t.Setenv(kv[0], kv[1])
+	}
+
+	// A bare remote registry.
+	bare := t.TempDir()
+	if out, err := exec.Command("git", "init", "--bare", bare).CombinedOutput(); err != nil {
+		t.Fatalf("init bare: %v\n%s", err, out)
+	}
+
+	// A local store with one artifact, published to the bare remote.
+	storeDir := filepath.Join(t.TempDir(), "store")
+	if err := os.MkdirAll(storeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(storeDir, "review.md"), []byte("body"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitRepo(storeDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetRemote(storeDir, bare); err != nil {
+		t.Fatal(err)
+	}
+	if committed, err := CommitAll(storeDir, "publish"); err != nil || !committed {
+		t.Fatalf("commit: committed=%v err=%v", committed, err)
+	}
+	if err := Push(storeDir); err != nil {
+		t.Fatal(err)
+	}
+
+	// Install from the bare remote and confirm the artifact arrived.
+	t.Setenv("YORI_HOME", t.TempDir())
+	idx, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := idx.Install(bare, "shared"); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	if !fileExists(filepath.Join(idx.Dir("shared"), "review.md")) {
+		t.Errorf("pushed artifact missing after install")
+	}
+}
