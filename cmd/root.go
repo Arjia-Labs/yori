@@ -14,7 +14,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:           "yori",
 	Short:         "Yori — the home for everything you tell your AI",
-	Long:          "Yori is a local library of reusable prompts. Store, compose, and render them into ready-to-pipe text.",
+	Long:          "Yori is a local library of reusable AI building blocks — prompts, agents,\nslash-commands, and skills. Store, compose, and render them into ready-to-pipe text.",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
