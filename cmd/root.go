@@ -37,6 +37,15 @@ func addTypeFlag(cmd *cobra.Command, v *string) {
 	cmd.Flags().StringVarP(v, "type", "t", "prompt", "artifact type: prompt|agent|command|skill")
 }
 
+// resolveArtifact loads an artifact, honoring --global by restricting the
+// lookup to the global store (bypassing project shadows and packages).
+func resolveArtifact(s *store.Store, typ store.Type, name string, global bool) (*store.Artifact, error) {
+	if global {
+		return s.ResolveGlobal(typ, name)
+	}
+	return s.Resolve(typ, name)
+}
+
 // openEditor opens path in the user's editor ($VISUAL, then $EDITOR, then vi),
 // wired to the controlling terminal.
 func openEditor(path string) error {

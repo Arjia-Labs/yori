@@ -9,7 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var showType string
+var (
+	showType   string
+	showGlobal bool
+)
 
 var showCmd = &cobra.Command{
 	Use:   "show <name>",
@@ -24,7 +27,7 @@ var showCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		a, err := s.Resolve(typ, args[0])
+		a, err := resolveArtifact(s, typ, args[0], showGlobal)
 		if err != nil {
 			return err
 		}
@@ -69,5 +72,6 @@ var showCmd = &cobra.Command{
 
 func init() {
 	addTypeFlag(showCmd, &showType)
+	showCmd.Flags().BoolVar(&showGlobal, "global", false, "read from the global store only")
 	rootCmd.AddCommand(showCmd)
 }

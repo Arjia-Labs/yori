@@ -97,7 +97,7 @@ func fileFor(dir string, typ Type, name string) string {
 // FilePath returns the on-disk path an artifact would have in the given scope,
 // without requiring it to exist.
 func (s *Store) FilePath(typ Type, name string, global bool) (string, error) {
-	if err := ident.Validate("artifact", name); err != nil {
+	if err := ident.ValidatePath("artifact", name); err != nil {
 		return "", err
 	}
 	dir, err := s.StoreDir(global)
@@ -126,7 +126,7 @@ func (s *Store) Resolve(typ Type, name string) (*Artifact, error) {
 		searchLayers = []layer{*l}
 		name = rest
 	}
-	if err := ident.Validate("artifact", name); err != nil {
+	if err := ident.ValidatePath("artifact", name); err != nil {
 		return nil, err
 	}
 	for _, l := range searchLayers {
@@ -144,9 +144,36 @@ func (s *Store) Resolve(typ Type, name string) (*Artifact, error) {
 		}
 		a.Layer = l.name
 		a.Type = typ
+		if l.pkg {
+			a.Package = l.name
+		}
 		return a, nil
 	}
 	return nil, fmt.Errorf("%s %q: %w", typ, name, ErrNotFound)
+}
+
+// ResolveGlobal loads an artifact only from the global store, ignoring project
+// shadows and packages — used by read commands' --global flag to inspect or
+// render a shadowed global artifact.
+func (s *Store) ResolveGlobal(typ Type, name string) (*Artifact, error) {
+	if err := ident.ValidatePath("artifact", name); err != nil {
+		return nil, err
+	}
+	path := fileFor(s.globalStore, typ, name)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%s %q: %w", typ, name, ErrNotFound)
+		}
+		return nil, err
+	}
+	a, err := parseArtifact(data, path)
+	if err != nil {
+		return nil, err
+	}
+	a.Layer = "global"
+	a.Type = typ
+	return a, nil
 }
 
 // ReadPartial resolves a partial by base name through the layered stores.
@@ -166,6 +193,25 @@ func (s *Store) ReadPartial(name string) ([]byte, error) {
 		return data, nil
 	}
 	return nil, fmt.Errorf("partial %q: %w", base, ErrNotFound)
+}
+
+// ReadPartialIn resolves a partial only within a specific installed package,
+// so an explicitly-addressed package artifact's includes stay self-contained
+// and aren't shadowed by same-named project/global partials.
+func (s *Store) ReadPartialIn(pkg, name string) ([]byte, error) {
+	l := s.findPackage(pkg)
+	if l == nil {
+		return nil, fmt.Errorf("no installed package %q", pkg)
+	}
+	base := strings.TrimSuffix(filepath.Base(name), filepath.Ext(name))
+	data, err := os.ReadFile(filepath.Join(l.dir, partialsDir, base+".md"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("partial %q in package %q: %w", base, pkg, ErrNotFound)
+		}
+		return nil, err
+	}
+	return data, nil
 }
 
 // List returns artifacts across layers. An empty typ lists every type; a
@@ -266,7 +312,7 @@ func (s *Store) Save(typ Type, name string, content []byte, global bool) (string
 
 // Delete removes a typed artifact from the store for the given scope.
 func (s *Store) Delete(typ Type, name string, global bool) error {
-	if err := ident.Validate("artifact", name); err != nil {
+	if err := ident.ValidatePath("artifact", name); err != nil {
 		return err
 	}
 	dir, err := s.StoreDir(global)

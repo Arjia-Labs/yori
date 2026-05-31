@@ -7,7 +7,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var whichType string
+var (
+	whichType   string
+	whichGlobal bool
+)
 
 var whichCmd = &cobra.Command{
 	Use:   "which <name>",
@@ -22,7 +25,7 @@ var whichCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		a, err := s.Resolve(typ, args[0])
+		a, err := resolveArtifact(s, typ, args[0], whichGlobal)
 		if err != nil {
 			return err
 		}
@@ -33,5 +36,6 @@ var whichCmd = &cobra.Command{
 
 func init() {
 	addTypeFlag(whichCmd, &whichType)
+	whichCmd.Flags().BoolVar(&whichGlobal, "global", false, "read from the global store only")
 	rootCmd.AddCommand(whichCmd)
 }

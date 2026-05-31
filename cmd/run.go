@@ -46,7 +46,7 @@ Variables come from (highest priority first):
 		if err != nil {
 			return err
 		}
-		art, err := s.Resolve(typ, p.name)
+		art, err := resolveArtifact(s, typ, p.name, p.global)
 		if err != nil {
 			return err
 		}
@@ -81,10 +81,11 @@ Variables come from (highest priority first):
 }
 
 type runParams struct {
-	name string
-	typ  string
-	vars map[string]string
-	file string
+	name   string
+	typ    string
+	vars   map[string]string
+	file   string
+	global bool
 }
 
 // parseRunArgs hand-parses run's args because variable flags are dynamic.
@@ -135,7 +136,8 @@ func parseRunArgs(args []string) (runParams, error) {
 			p.typ = val
 			continue
 		case "global":
-			continue // store-targeting not meaningful for read; accepted, ignored
+			p.global = true
+			continue
 		case "file":
 			if !hasVal {
 				val, hasVal = takeNext(args, &i)

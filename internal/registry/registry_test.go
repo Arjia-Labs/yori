@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/rovak/yori/internal/config"
 )
 
 func TestNameFromURL(t *testing.T) {
@@ -42,6 +44,44 @@ func makeSourceRepo(t *testing.T) string {
 	run("add", "-A")
 	run("commit", "-m", "init")
 	return dir
+}
+
+func TestInvalidPersistedNameQuarantined(t *testing.T) {
+	t.Setenv("YORI_HOME", t.TempDir())
+	regFile, err := config.RegistryFile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(regFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	yaml := "packages:\n  - name: ../evil\n    url: file:///x\n    commit: dead\n"
+	if err := os.WriteFile(regFile, []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	idx, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The invalid entry is never exposed as a resolution layer.
+	if dirs := idx.Dirs(); len(dirs) != 0 {
+		t.Errorf("Dirs() = %+v, want none (invalid entry excluded)", dirs)
+	}
+	// update-all skips it without trying to git-pull an untrusted path.
+	if err := idx.Update(""); err != nil {
+		t.Errorf("Update(all) should skip invalid entries: %v", err)
+	}
+	// But it can still be cleaned up by name, with no filesystem operation.
+	if idx.Find("../evil") == nil {
+		t.Fatal("invalid entry should still be listed for cleanup")
+	}
+	if err := idx.Uninstall("../evil"); err != nil {
+		t.Errorf("Uninstall of invalid persisted name: %v", err)
+	}
+	if idx.Find("../evil") != nil {
+		t.Errorf("invalid entry not removed")
+	}
 }
 
 func TestRejectBadPackageName(t *testing.T) {

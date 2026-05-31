@@ -82,10 +82,16 @@ func (i *Index) Find(name string) *Pkg {
 	return nil
 }
 
-// Dirs returns each installed package's name and clone dir, in order.
+// Dirs returns each safely-named package's name and clone dir, in order.
+// Entries with invalid persisted names (e.g. written by hand before name
+// validation existed) are skipped so they never become resolution layers or
+// get operated on by path.
 func (i *Index) Dirs() []struct{ Name, Dir string } {
 	out := make([]struct{ Name, Dir string }, 0, len(i.Packages))
 	for _, p := range i.Packages {
+		if !ident.Valid(p.Name) {
+			continue
+		}
 		out = append(out, struct{ Name, Dir string }{p.Name, i.Dir(p.Name)})
 	}
 	return out
@@ -125,16 +131,18 @@ func (i *Index) Install(url, name string) (*Pkg, error) {
 	return &p, nil
 }
 
-// Uninstall removes a package's clone and index entry.
+// Uninstall removes a package's index entry, and its clone when the name is a
+// safe path. A legacy entry with an invalid (untrusted) name is removed from
+// the index without touching the filesystem — so stale escaped entries can be
+// cleaned up via the CLI without risking a delete outside the package root.
 func (i *Index) Uninstall(name string) error {
-	if err := ident.Validate("package", name); err != nil {
-		return err
-	}
 	if i.Find(name) == nil {
 		return fmt.Errorf("package %q is not installed", name)
 	}
-	if err := os.RemoveAll(i.Dir(name)); err != nil {
-		return err
+	if ident.Valid(name) {
+		if err := os.RemoveAll(i.Dir(name)); err != nil {
+			return err
+		}
 	}
 	out := i.Packages[:0]
 	for _, p := range i.Packages {
@@ -156,6 +164,11 @@ func (i *Index) Update(name string) error {
 	for idx := range i.Packages {
 		p := &i.Packages[idx]
 		if name != "" && p.Name != name {
+			continue
+		}
+		if !ident.Valid(p.Name) {
+			// Never run git against an untrusted persisted path.
+			fmt.Fprintf(os.Stderr, "yori: skipping package with invalid name %q (run `yori uninstall %q` to remove)\n", p.Name, p.Name)
 			continue
 		}
 		commit, err := Pull(i.Dir(p.Name))

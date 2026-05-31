@@ -139,8 +139,9 @@ func TestRejectTraversalNames(t *testing.T) {
 	dir := t.TempDir()
 	s := &Store{globalStore: filepath.Join(dir, "store")}
 
-	bad := []string{"../../outside", "nested/foo", "bad: name", "/abs", ".."}
-	for _, name := range bad {
+	// Traversal / non-contained names are rejected by every path operation.
+	traversal := []string{"../../outside", "nested/foo", "/abs", "..", "."}
+	for _, name := range traversal {
 		if _, err := s.FilePath(TypePrompt, name, true); err == nil {
 			t.Errorf("FilePath accepted %q", name)
 		}
@@ -158,6 +159,28 @@ func TestRejectTraversalNames(t *testing.T) {
 	// Nothing escaped the store directory.
 	if Exists(filepath.Join(dir, "outside.md")) || Exists(filepath.Join(dir, "store", "nested")) {
 		t.Errorf("a rejected name still wrote to disk")
+	}
+}
+
+// A contained-but-ugly name (no path separators) is rejected on *creation*
+// but remains manageable for path ops, so legacy files stay reachable.
+func TestContainedUglyNameSplit(t *testing.T) {
+	dir := t.TempDir()
+	s := &Store{globalStore: filepath.Join(dir, "store")}
+
+	if _, err := s.Save(TypePrompt, "bad: name", []byte("x"), true); err == nil {
+		t.Errorf("Save should reject strict-invalid name")
+	}
+	if _, err := s.FilePath(TypePrompt, "bad: name", true); err != nil {
+		t.Errorf("FilePath should allow a contained name: %v", err)
+	}
+	// Hand-place a legacy file, then confirm it's resolvable and deletable.
+	writeFile(t, fileFor(filepath.Join(dir, "store"), TypePrompt, "bad: name"), "---\nname: \"bad: name\"\n---\nbody")
+	if _, err := s.Resolve(TypePrompt, "bad: name"); err != nil {
+		t.Errorf("Resolve should reach legacy file: %v", err)
+	}
+	if err := s.Delete(TypePrompt, "bad: name", true); err != nil {
+		t.Errorf("Delete should remove legacy file: %v", err)
 	}
 }
 

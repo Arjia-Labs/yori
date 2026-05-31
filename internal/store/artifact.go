@@ -68,10 +68,11 @@ type Artifact struct {
 	Extends     string         `yaml:"extends,omitempty"`
 	Vars        map[string]Var `yaml:"vars,omitempty"`
 
-	Body  string `yaml:"-"` // template body, frontmatter stripped
-	Path  string `yaml:"-"` // resolved file path on disk
-	Layer string `yaml:"-"` // "project" or "global"
-	Type  Type   `yaml:"-"` // derived from the file's location
+	Body    string `yaml:"-"` // template body, frontmatter stripped
+	Path    string `yaml:"-"` // resolved file path on disk
+	Layer   string `yaml:"-"` // "project", "global", or a package name
+	Type    Type   `yaml:"-"` // derived from the file's location
+	Package string `yaml:"-"` // package name when resolved from an installed package, else ""
 }
 
 var frontmatterDelim = []byte("---")

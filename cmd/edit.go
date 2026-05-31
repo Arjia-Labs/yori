@@ -41,6 +41,9 @@ var editCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
+			if a.Package != "" {
+				return fmt.Errorf("%q resolves to read-only package %q; copy it into your project or global store before editing", name, a.Package)
+			}
 			path = a.Path
 		}
 		return openEditor(path)

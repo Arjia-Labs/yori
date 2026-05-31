@@ -7,6 +7,7 @@ package ident
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 // valid matches a logical name: starts alphanumeric, then alphanumerics plus
@@ -30,4 +31,20 @@ func Validate(kind, name string) error {
 // Valid reports whether name is acceptable, without an error message.
 func Valid(name string) bool {
 	return valid.MatchString(name)
+}
+
+// ValidatePath enforces only path safety: name must be a single, contained
+// filesystem segment — no slashes, NUL, or "."/".." — so it can never escape
+// its directory. This is the weaker check used for *reading and deleting*
+// existing artifacts, so legacy files with otherwise-ugly names (e.g. spaces)
+// stay manageable while traversal stays blocked. Creation still uses the
+// stricter Validate.
+func ValidatePath(kind, name string) error {
+	if name == "" {
+		return fmt.Errorf("%s name is empty", kind)
+	}
+	if name == "." || name == ".." || strings.ContainsAny(name, `/\`+"\x00") {
+		return fmt.Errorf("invalid %s name %q: must be a single name without path separators", kind, name)
+	}
+	return nil
 }

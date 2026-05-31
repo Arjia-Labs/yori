@@ -23,12 +23,21 @@ func (f fakeResolver) ReadPartial(name string) ([]byte, error) {
 
 // resolverWithArtifacts also resolves named artifacts (for `extends`).
 type resolverWithArtifacts struct {
-	partials  fakeResolver
-	artifacts map[string]*store.Artifact
+	partials    fakeResolver
+	pkgPartials fakeResolver // returned by ReadPartialIn, to verify scoping
+	artifacts   map[string]*store.Artifact
 }
 
 func (r resolverWithArtifacts) ReadPartial(name string) ([]byte, error) {
 	return r.partials.ReadPartial(name)
+}
+
+func (r resolverWithArtifacts) ReadPartialIn(_ string, name string) ([]byte, error) {
+	return r.pkgPartials.ReadPartial(name)
+}
+
+func (f fakeResolver) ReadPartialIn(_ string, name string) ([]byte, error) {
+	return f.ReadPartial(name)
 }
 
 func (r resolverWithArtifacts) Resolve(_ store.Type, name string) (*store.Artifact, error) {
@@ -163,6 +172,46 @@ func TestExtendsCycle(t *testing.T) {
 	}
 	if _, err := Render(a, r, Options{}); err == nil {
 		t.Errorf("expected cycle error")
+	}
+}
+
+func TestPackageScopedExtends(t *testing.T) {
+	// A package child's `extends: base` must bind to the package's own base,
+	// not a same-named project base.
+	child := &store.Artifact{Name: "child", Path: "/pkg/child.md", Package: "pkg", Extends: "base",
+		Body: `{% fill "g" %}C{% endfill %}`}
+	pkgBase := &store.Artifact{Name: "base", Path: "/pkg/base.md", Package: "pkg",
+		Body: `PKG {% slot "g" %}d{% endslot %}`}
+	projBase := &store.Artifact{Name: "base", Path: "/proj/base.md",
+		Body: `PROJ {% slot "g" %}d{% endslot %}`}
+	r := resolverWithArtifacts{
+		partials:  fakeResolver{},
+		artifacts: map[string]*store.Artifact{"pkg/base": pkgBase, "base": projBase},
+	}
+	out, err := Render(child, r, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "PKG C" {
+		t.Errorf("got %q, want package base (\"PKG C\")", out)
+	}
+}
+
+func TestPackageScopedInclude(t *testing.T) {
+	// A package artifact's {% include %} must read the package's partial.
+	art := &store.Artifact{Name: "p", Path: "/pkg/p.md", Package: "pkg",
+		Body: `{% include 'style' %}`}
+	r := resolverWithArtifacts{
+		partials:    fakeResolver{"style": "GLOBAL"},
+		pkgPartials: fakeResolver{"style": "PKG"},
+		artifacts:   map[string]*store.Artifact{},
+	}
+	out, err := Render(art, r, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out) != "PKG" {
+		t.Errorf("got %q, want package partial (\"PKG\")", out)
 	}
 }
 

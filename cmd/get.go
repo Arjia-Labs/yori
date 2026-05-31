@@ -7,7 +7,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var getType string
+var (
+	getType   string
+	getGlobal bool
+)
 
 var getCmd = &cobra.Command{
 	Use:   "get <name>",
@@ -22,7 +25,7 @@ var getCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		a, err := s.Resolve(typ, args[0])
+		a, err := resolveArtifact(s, typ, args[0], getGlobal)
 		if err != nil {
 			return err
 		}
@@ -33,5 +36,6 @@ var getCmd = &cobra.Command{
 
 func init() {
 	addTypeFlag(getCmd, &getType)
+	getCmd.Flags().BoolVar(&getGlobal, "global", false, "read from the global store only")
 	rootCmd.AddCommand(getCmd)
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
+	"github.com/rovak/yori/internal/ident"
 	"github.com/rovak/yori/internal/registry"
 	"github.com/spf13/cobra"
 )
@@ -30,7 +31,11 @@ var pkgLsCmd = &cobra.Command{
 		w := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
 		fmt.Fprintln(w, "NAME\tCOMMIT\tURL")
 		for _, p := range idx.Packages {
-			fmt.Fprintf(w, "%s\t%s\t%s\n", p.Name, p.Commit, p.URL)
+			note := ""
+			if !ident.Valid(p.Name) {
+				note = "\t⚠ invalid name (inactive; run `yori uninstall` to remove)"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s%s\n", p.Name, p.Commit, p.URL, note)
 		}
 		return w.Flush()
 	},

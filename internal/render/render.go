@@ -16,6 +16,8 @@ import (
 type Resolver interface {
 	// ReadPartial loads a partial's bytes (by base name, no extension).
 	ReadPartial(name string) ([]byte, error)
+	// ReadPartialIn loads a partial only from the named installed package.
+	ReadPartialIn(pkg, name string) ([]byte, error)
 	// Resolve loads a typed artifact by name (used to follow `extends`).
 	Resolve(typ store.Type, name string) (*store.Artifact, error)
 }
@@ -39,11 +41,19 @@ type Options struct {
 	Input string
 }
 
-// templateStore adapts a Resolver to liquid's TemplateStore, which is
-// called for {% include %} with a path; we resolve by base name.
-type templateStore struct{ r Resolver }
+// templateStore adapts a Resolver to liquid's TemplateStore, which is called
+// for {% include %} with a path; we resolve by base name. When pkg is set (the
+// artifact was addressed within an installed package), includes resolve only
+// within that package so the render stays self-contained.
+type templateStore struct {
+	r   Resolver
+	pkg string
+}
 
 func (t templateStore) ReadTemplate(name string) ([]byte, error) {
+	if t.pkg != "" {
+		return t.r.ReadPartialIn(t.pkg, name)
+	}
 	return t.r.ReadPartial(name)
 }
 
@@ -58,7 +68,7 @@ func Render(a *store.Artifact, resolver Resolver, opts Options) (string, error) 
 	}
 
 	engine := liquid.NewEngine()
-	engine.RegisterTemplateStore(templateStore{resolver})
+	engine.RegisterTemplateStore(templateStore{r: resolver, pkg: a.Package})
 
 	bindings := liquid.Bindings{}
 	for k, v := range opts.Vars {
@@ -105,7 +115,14 @@ func layout(a *store.Artifact, resolver Resolver, visited map[string]bool) (stri
 	}
 	visited[a.Name] = true
 
-	base, err := resolver.Resolve(a.Type, a.Extends)
+	// Scope the base lookup to the same package when the child came from one,
+	// so package inheritance is self-contained and not shadowed by a
+	// same-named project/global base.
+	extendsName := a.Extends
+	if a.Package != "" {
+		extendsName = a.Package + "/" + a.Extends
+	}
+	base, err := resolver.Resolve(a.Type, extendsName)
 	if err != nil {
 		return "", fmt.Errorf("%s extends %s: %w", a.Name, a.Extends, err)
 	}
