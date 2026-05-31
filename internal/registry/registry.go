@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/rovak/yori/internal/config"
+	"github.com/rovak/yori/internal/ident"
 	"gopkg.in/yaml.v3"
 )
 
@@ -99,6 +100,9 @@ func (i *Index) Install(url, name string) (*Pkg, error) {
 	if name == "" {
 		return nil, fmt.Errorf("could not derive a package name from %q; pass --name", url)
 	}
+	if err := ident.Validate("package", name); err != nil {
+		return nil, err
+	}
 	if i.Find(name) != nil {
 		return nil, fmt.Errorf("package %q already installed; use `yori update %s`", name, name)
 	}
@@ -123,6 +127,9 @@ func (i *Index) Install(url, name string) (*Pkg, error) {
 
 // Uninstall removes a package's clone and index entry.
 func (i *Index) Uninstall(name string) error {
+	if err := ident.Validate("package", name); err != nil {
+		return err
+	}
 	if i.Find(name) == nil {
 		return fmt.Errorf("package %q is not installed", name)
 	}
@@ -141,6 +148,11 @@ func (i *Index) Uninstall(name string) error {
 
 // Update pulls a package (or all packages when name is "") and re-pins commits.
 func (i *Index) Update(name string) error {
+	if name != "" {
+		if err := ident.Validate("package", name); err != nil {
+			return err
+		}
+	}
 	for idx := range i.Packages {
 		p := &i.Packages[idx]
 		if name != "" && p.Name != name {

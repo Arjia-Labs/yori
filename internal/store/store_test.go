@@ -135,6 +135,49 @@ func contains(s, sub string) bool {
 	return filepath.Base(filepath.Dir(s)) == sub
 }
 
+func TestRejectTraversalNames(t *testing.T) {
+	dir := t.TempDir()
+	s := &Store{globalStore: filepath.Join(dir, "store")}
+
+	bad := []string{"../../outside", "nested/foo", "bad: name", "/abs", ".."}
+	for _, name := range bad {
+		if _, err := s.FilePath(TypePrompt, name, true); err == nil {
+			t.Errorf("FilePath accepted %q", name)
+		}
+		if _, err := s.Save(TypePrompt, name, []byte("x"), true); err == nil {
+			t.Errorf("Save accepted %q", name)
+		}
+		if _, err := s.Resolve(TypePrompt, name); err == nil {
+			t.Errorf("Resolve accepted %q", name)
+		}
+		if err := s.Delete(TypePrompt, name, true); err == nil {
+			t.Errorf("Delete accepted %q", name)
+		}
+	}
+
+	// Nothing escaped the store directory.
+	if Exists(filepath.Join(dir, "outside.md")) || Exists(filepath.Join(dir, "store", "nested")) {
+		t.Errorf("a rejected name still wrote to disk")
+	}
+}
+
+func TestListSkipsMalformedFile(t *testing.T) {
+	dir := t.TempDir()
+	global := filepath.Join(dir, "store")
+	writeFile(t, fileFor(global, TypePrompt, "good"), "---\nname: good\n---\nbody")
+	// A hand-placed file with broken frontmatter.
+	writeFile(t, filepath.Join(global, "broken.md"), "---\nname: bad: name\n---\nbody")
+
+	s := &Store{globalStore: global}
+	list, err := s.List(TypePrompt, true, "")
+	if err != nil {
+		t.Fatalf("List errored instead of skipping: %v", err)
+	}
+	if len(list) != 1 || list[0].Name != "good" {
+		t.Errorf("expected only 'good', got %+v", list)
+	}
+}
+
 func TestReadPartial(t *testing.T) {
 	dir := t.TempDir()
 	global := filepath.Join(dir, "store")

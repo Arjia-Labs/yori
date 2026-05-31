@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/rovak/yori/internal/config"
+	"github.com/rovak/yori/internal/ident"
 	"github.com/rovak/yori/internal/registry"
 )
 
@@ -96,6 +97,9 @@ func fileFor(dir string, typ Type, name string) string {
 // FilePath returns the on-disk path an artifact would have in the given scope,
 // without requiring it to exist.
 func (s *Store) FilePath(typ Type, name string, global bool) (string, error) {
+	if err := ident.Validate("artifact", name); err != nil {
+		return "", err
+	}
 	dir, err := s.StoreDir(global)
 	if err != nil {
 		return "", err
@@ -114,10 +118,16 @@ func Exists(path string) bool {
 func (s *Store) Resolve(typ Type, name string) (*Artifact, error) {
 	searchLayers := s.layers()
 	if pkgName, rest, ok := strings.Cut(name, "/"); ok {
-		if l := s.findPackage(pkgName); l != nil {
-			searchLayers = []layer{*l}
-			name = rest
+		// The only legal slash is a package qualifier: "<pkg>/<name>".
+		l := s.findPackage(pkgName)
+		if l == nil {
+			return nil, fmt.Errorf("invalid name %q: no installed package %q (names cannot contain '/')", name, pkgName)
 		}
+		searchLayers = []layer{*l}
+		name = rest
+	}
+	if err := ident.Validate("artifact", name); err != nil {
+		return nil, err
 	}
 	for _, l := range searchLayers {
 		path := fileFor(l.dir, typ, name)
@@ -204,7 +214,9 @@ func (s *Store) List(typ Type, global bool, tag string) ([]*Artifact, error) {
 				}
 				a, err := parseArtifact(data, path)
 				if err != nil {
-					return nil, err
+					// One malformed file shouldn't break the whole listing.
+					fmt.Fprintf(os.Stderr, "yori: skipping %s: %v\n", path, err)
+					continue
 				}
 				a.Layer = l.name
 				a.Type = t
@@ -235,6 +247,9 @@ func hasTag(a *Artifact, tag string) bool {
 
 // Save writes a typed artifact's content to the store for the given scope.
 func (s *Store) Save(typ Type, name string, content []byte, global bool) (string, error) {
+	if err := ident.Validate("artifact", name); err != nil {
+		return "", err
+	}
 	dir, err := s.StoreDir(global)
 	if err != nil {
 		return "", err
@@ -251,6 +266,9 @@ func (s *Store) Save(typ Type, name string, content []byte, global bool) (string
 
 // Delete removes a typed artifact from the store for the given scope.
 func (s *Store) Delete(typ Type, name string, global bool) error {
+	if err := ident.Validate("artifact", name); err != nil {
+		return err
+	}
 	dir, err := s.StoreDir(global)
 	if err != nil {
 		return err

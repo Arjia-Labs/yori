@@ -44,6 +44,26 @@ func makeSourceRepo(t *testing.T) string {
 	return dir
 }
 
+func TestRejectBadPackageName(t *testing.T) {
+	t.Setenv("YORI_HOME", t.TempDir())
+	idx, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"../pkg-escape", "a/b", "..", "/abs"} {
+		if _, err := idx.Install("file:///irrelevant", name); err == nil {
+			t.Errorf("Install accepted bad name %q", name)
+		}
+		if err := idx.Uninstall(name); err == nil {
+			t.Errorf("Uninstall accepted bad name %q", name)
+		}
+	}
+	// No escaped clone directory was created.
+	if fileExists(filepath.Join(idx.pkgRoot, "..", "pkg-escape")) {
+		t.Errorf("escaped clone dir was created")
+	}
+}
+
 func TestInstallUpdateUninstall(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
