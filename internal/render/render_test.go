@@ -21,6 +21,27 @@ func (f fakeResolver) ReadPartial(name string) ([]byte, error) {
 	return nil, fmt.Errorf("no partial %q", base)
 }
 
+// resolverWithArtifacts also resolves named artifacts (for `extends`).
+type resolverWithArtifacts struct {
+	partials  fakeResolver
+	artifacts map[string]*store.Artifact
+}
+
+func (r resolverWithArtifacts) ReadPartial(name string) ([]byte, error) {
+	return r.partials.ReadPartial(name)
+}
+
+func (r resolverWithArtifacts) Resolve(name string) (*store.Artifact, error) {
+	if a, ok := r.artifacts[name]; ok {
+		return a, nil
+	}
+	return nil, fmt.Errorf("no artifact %q", name)
+}
+
+func (f fakeResolver) Resolve(name string) (*store.Artifact, error) {
+	return nil, fmt.Errorf("no artifact %q", name)
+}
+
 func render(t *testing.T, body string, opts Options) string {
 	t.Helper()
 	a := &store.Artifact{Name: "t", Body: body, Path: "/store/t.md"}
@@ -81,6 +102,67 @@ func TestPartialInclude(t *testing.T) {
 	}
 	if !strings.Contains(out, "Be concise.") || !strings.Contains(out, "body") {
 		t.Errorf("got %q", out)
+	}
+}
+
+func TestSlotDefaultWhenStandalone(t *testing.T) {
+	// A base rendered directly emits its slot defaults.
+	got := render(t, `A {% slot "g" %}default-g{% endslot %} B`, Options{})
+	if got != "A default-g B" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtendsFillOverrides(t *testing.T) {
+	base := &store.Artifact{Name: "base", Path: "/s/base.md",
+		Body: `Intro.
+{% slot "guidelines" %}Be concise.{% endslot %}
+{% slot "extra" %}none{% endslot %}`}
+	child := &store.Artifact{Name: "child", Path: "/s/child.md", Extends: "base",
+		Body: `{% fill "guidelines" %}Be verbose.{% endfill %}`}
+	r := resolverWithArtifacts{
+		partials:  fakeResolver{},
+		artifacts: map[string]*store.Artifact{"base": base},
+	}
+	out, err := Render(child, r, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Intro.\nBe verbose.\nnone"
+	if out != want {
+		t.Errorf("got %q want %q", out, want)
+	}
+}
+
+func TestExtendsChainAndVars(t *testing.T) {
+	grand := &store.Artifact{Name: "grand", Path: "/s/grand.md",
+		Body: `Top {% slot "mid" %}mid-default{% endslot %} {% slot "leaf" %}leaf-default{% endslot %}`}
+	mid := &store.Artifact{Name: "mid", Path: "/s/mid.md", Extends: "grand",
+		Body: `{% fill "mid" %}MID for {{ who }}{% endfill %}`}
+	leaf := &store.Artifact{Name: "leaf", Path: "/s/leaf.md", Extends: "mid",
+		Body: `{% fill "leaf" %}LEAF{% endfill %}`}
+	r := resolverWithArtifacts{
+		partials:  fakeResolver{},
+		artifacts: map[string]*store.Artifact{"grand": grand, "mid": mid},
+	}
+	out, err := Render(leaf, r, Options{Vars: map[string]any{"who": "team"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "Top MID for team LEAF" {
+		t.Errorf("got %q", out)
+	}
+}
+
+func TestExtendsCycle(t *testing.T) {
+	a := &store.Artifact{Name: "a", Path: "/s/a.md", Extends: "b", Body: ""}
+	b := &store.Artifact{Name: "b", Path: "/s/b.md", Extends: "a", Body: ""}
+	r := resolverWithArtifacts{
+		partials:  fakeResolver{},
+		artifacts: map[string]*store.Artifact{"a": a, "b": b},
+	}
+	if _, err := Render(a, r, Options{}); err == nil {
+		t.Errorf("expected cycle error")
 	}
 }
 

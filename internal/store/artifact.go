@@ -21,6 +21,7 @@ type Artifact struct {
 	Description string         `yaml:"description,omitempty"`
 	Tags        []string       `yaml:"tags,omitempty"`
 	Model       string         `yaml:"model,omitempty"`
+	Extends     string         `yaml:"extends,omitempty"`
 	Vars        map[string]Var `yaml:"vars,omitempty"`
 
 	Body  string `yaml:"-"` // template body, frontmatter stripped
@@ -92,8 +93,9 @@ func (a *Artifact) Render() ([]byte, error) {
 		Description string         `yaml:"description,omitempty"`
 		Tags        []string       `yaml:"tags,omitempty"`
 		Model       string         `yaml:"model,omitempty"`
+		Extends     string         `yaml:"extends,omitempty"`
 		Vars        map[string]Var `yaml:"vars,omitempty"`
-	}{a.Name, a.Description, a.Tags, a.Model, a.Vars}
+	}{a.Name, a.Description, a.Tags, a.Model, a.Extends, a.Vars}
 
 	out, err := yaml.Marshal(fm)
 	if err != nil {
