@@ -92,10 +92,18 @@ func parseRunArgs(args []string) (runParams, error) {
 	p := runParams{vars: map[string]string{}}
 	for i := 0; i < len(args); i++ {
 		tok := args[i]
-		// Short -t/--type for the artifact type.
+		// Short -t for the artifact type: -t agent, -t=agent, or -tagent.
 		if tok == "-t" {
 			val, ok := takeNext(args, &i)
 			if !ok {
+				return p, fmt.Errorf("-t requires a type")
+			}
+			p.typ = val
+			continue
+		}
+		if strings.HasPrefix(tok, "-t") && !strings.HasPrefix(tok, "--") {
+			val := strings.TrimPrefix(tok[2:], "=")
+			if val == "" {
 				return p, fmt.Errorf("-t requires a type")
 			}
 			p.typ = val
