@@ -32,6 +32,24 @@ func GlobalStore() (string, error) {
 	return filepath.Join(root, "store"), nil
 }
 
+// PkgRoot returns ~/.yori/pkg, where installed registry packages are cloned.
+func PkgRoot() (string, error) {
+	root, err := GlobalRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, "pkg"), nil
+}
+
+// RegistryFile returns ~/.yori/registry.yaml, the installed-package index.
+func RegistryFile() (string, error) {
+	root, err := GlobalRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, "registry.yaml"), nil
+}
+
 // FindProjectRoot walks up from start looking for a ".yori" directory and
 // returns the path to that directory (e.g. /repo/.yori). It returns "" when
 // none is found.

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/rovak/yori/internal/config"
+	"github.com/rovak/yori/internal/registry"
 )
 
 // ErrNotFound is returned when an artifact cannot be resolved in any layer.
@@ -18,13 +19,16 @@ var ErrNotFound = errors.New("artifact not found")
 
 const partialsDir = "partials"
 
-// Store resolves artifacts across the project and global layers.
+// Store resolves artifacts across the project, global, and installed-package
+// layers (in that priority order).
 type Store struct {
 	projectStore string // "" when there is no project store
 	globalStore  string
+	packages     []layer // installed registry packages, read-only
 }
 
-// New constructs a Store from the current working directory and home dir.
+// New constructs a Store from the current working directory and home dir,
+// including any installed registry packages as read-only layers.
 func New() (*Store, error) {
 	global, err := config.GlobalStore()
 	if err != nil {
@@ -34,22 +38,43 @@ func New() (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{projectStore: project, globalStore: global}, nil
+	idx, err := registry.Load()
+	if err != nil {
+		return nil, err
+	}
+	var pkgs []layer
+	for _, d := range idx.Dirs() {
+		pkgs = append(pkgs, layer{name: d.Name, dir: d.Dir, pkg: true})
+	}
+	return &Store{projectStore: project, globalStore: global, packages: pkgs}, nil
 }
 
-// layers returns the store directories in resolution order (project first).
+// layers returns the store directories in resolution order: project, then
+// global, then installed packages.
 func (s *Store) layers() []layer {
 	var ls []layer
 	if s.projectStore != "" {
 		ls = append(ls, layer{name: "project", dir: s.projectStore})
 	}
 	ls = append(ls, layer{name: "global", dir: s.globalStore})
+	ls = append(ls, s.packages...)
 	return ls
 }
 
 type layer struct {
 	name string
 	dir  string
+	pkg  bool // a read-only installed package
+}
+
+// findPackage returns the layer for an installed package by name, or nil.
+func (s *Store) findPackage(name string) *layer {
+	for i := range s.packages {
+		if s.packages[i].name == name {
+			return &s.packages[i]
+		}
+	}
+	return nil
 }
 
 // StoreDir returns the directory to write to for the given scope.
@@ -84,9 +109,17 @@ func Exists(path string) bool {
 	return err == nil
 }
 
-// Resolve loads the highest-priority artifact of the given type and name.
+// Resolve loads the highest-priority artifact of the given type and name. A
+// name of the form "<pkg>/<name>" resolves only within that installed package.
 func (s *Store) Resolve(typ Type, name string) (*Artifact, error) {
-	for _, l := range s.layers() {
+	searchLayers := s.layers()
+	if pkgName, rest, ok := strings.Cut(name, "/"); ok {
+		if l := s.findPackage(pkgName); l != nil {
+			searchLayers = []layer{*l}
+			name = rest
+		}
+	}
+	for _, l := range searchLayers {
 		path := fileFor(l.dir, typ, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
