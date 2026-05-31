@@ -1,0 +1,46 @@
+package cmd
+
+import (
+	"fmt"
+
+	"github.com/rovak/yori/internal/store"
+	"github.com/spf13/cobra"
+)
+
+var editGlobal bool
+
+var editCmd = &cobra.Command{
+	Use:   "edit <name>",
+	Short: "Open an existing artifact in your editor",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name := args[0]
+		s, err := mustStore()
+		if err != nil {
+			return err
+		}
+
+		var path string
+		if editGlobal {
+			path, err = s.FilePath(name, true)
+			if err != nil {
+				return err
+			}
+			if !store.Exists(path) {
+				return fmt.Errorf("%q not found in global store", name)
+			}
+		} else {
+			a, err := s.Resolve(name)
+			if err != nil {
+				return err
+			}
+			path = a.Path
+		}
+		return openEditor(path)
+	},
+}
+
+func init() {
+	editCmd.Flags().BoolVar(&editGlobal, "global", false, "edit the global copy")
+	rootCmd.AddCommand(editCmd)
+}
