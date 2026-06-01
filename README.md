@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/header.jpg" alt="yori — the home for everything you tell your AI" width="100%">
+</p>
+
 <h1 align="center">yori</h1>
 
 <p align="center">
