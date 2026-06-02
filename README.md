@@ -10,6 +10,8 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/arjia-labs/yori/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/arjia-labs/yori/ci.yml?branch=main&style=flat-square&logo=github&label=build" alt="Build status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT licensed"></a>
   <img src="https://img.shields.io/badge/go-1.26%2B-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26+">
   <img src="https://img.shields.io/badge/CGo-free-success?style=flat-square" alt="No CGo">
   <img src="https://img.shields.io/badge/unix-pipe--friendly-333?style=flat-square" alt="Pipe friendly">
@@ -53,7 +55,7 @@ cat bug.log | yori run triage --tone=blunt | claude
 ## 📦 Install
 
 ```bash
-go install github.com/rovak/yori@latest
+go install github.com/arjia-labs/yori@latest
 ```
 
 Add `$HOME/go/bin` to your `PATH`, then verify with `yori --help`.

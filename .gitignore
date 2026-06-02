@@ -1,3 +1,6 @@
 /yori
 /dist/
 *.out
+
+# Local clu tracker (agent coordination)
+.clu/

@@ -1,0 +1,31 @@
+name: Bug report
+description: Something in yori behaves incorrectly
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, and what went wrong?
+      placeholder: |
+        Steps to reproduce:
+        1. yori ...
+        2. ...
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: yori version
+      description: Output of `yori --version` (or the commit you built from).
+    validations:
+      required: false
+  - type: input
+    id: os
+    attributes:
+      label: OS / platform
+      placeholder: macOS 14 (arm64), Ubuntu 24.04, ...
+    validations:
+      required: false
