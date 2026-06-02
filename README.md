@@ -225,6 +225,14 @@ For Claude Code this writes:
 
 yori records what it wrote, so a re-sync **prunes** artifacts you've removed and refuses to clobber files it didn't create (use `--force` to override). This is the piece a plain installer can't do: the deployed skill is a *rendered, parameterized* copy of your source, not a raw file. (More agents — Codex, Cursor — and `agent`/subagent mapping are on the roadmap.)
 
+**Make it reproducible.** `yori sync --save` records the chosen artifacts to a committed `.yori/sync.yaml`. Then a teammate clones the repo and runs a bare `yori sync` to hydrate the project's whole agent setup in one command:
+
+```yaml
+# .yori/sync.yaml
+agents: [claude-code]
+artifacts: [researcher, triage]
+```
+
 ## 📋 Command reference
 
 | command | what it does |
@@ -243,7 +251,7 @@ yori records what it wrote, so a re-sync **prunes** artifacts you've removed and
 | `yori update [name]` | pull + re-pin installed packages |
 | `yori uninstall <name>` | remove an installed package |
 | `yori push` | publish the global store to a git remote (`--remote`, `-m`) |
-| `yori sync [names]` | render skills + commands into an agent's dirs (`--agent`, `--global`, `--link`, `--set`, `--force`) |
+| `yori sync [names]` | render skills + commands into an agent's dirs (`--agent`, `--global`, `--link`, `--set`, `--force`, `--save`) |
 | `yori unsync` | remove what `yori sync` placed (`--agent`, `--global`) |
 
 Shared flags: `--type`/`-t` selects the artifact type; `--global` targets `~/.yori` instead of the project.

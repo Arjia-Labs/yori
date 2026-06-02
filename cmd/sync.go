@@ -17,6 +17,7 @@ var (
 	syncGlobal bool
 	syncLink   bool
 	syncForce  bool
+	syncSave   bool
 	syncSet    []string
 )
 
@@ -41,40 +42,84 @@ removed artifacts and 'yori unsync' cleans everything up.`,
 		if err != nil {
 			return err
 		}
-		arts, err := gatherForSync(s, syncGlobal, args)
-		if err != nil {
-			return err
-		}
 		base, statePath, err := syncScope(syncGlobal)
 		if err != nil {
 			return err
 		}
+		manifestPath := filepath.Join(filepath.Dir(statePath), "sync.yaml")
 
-		res, err := deploy.Sync(s, arts, deploy.Options{
-			Agent:   syncAgent,
-			BaseDir: base,
-			State:   statePath,
-			Link:    syncLink,
-			Force:   syncForce,
-			Set:     set,
-		})
+		// Decide the target agents and artifact names from flags / manifest.
+		agents := []string{syncAgent}
+		names := args
+
+		switch {
+		case syncSave:
+			if len(names) == 0 {
+				if names, err = allArtifactNames(s, syncGlobal); err != nil {
+					return err
+				}
+			}
+			m := &deploy.Manifest{Agents: []string{syncAgent}, Artifacts: names}
+			if err := m.Save(manifestPath); err != nil {
+				return err
+			}
+			fmt.Printf("saved sync manifest %s\n", manifestPath)
+		case len(args) == 0:
+			if m, ok, err := deploy.LoadManifest(manifestPath); err != nil {
+				return err
+			} else if ok {
+				agents, names = m.Agents, m.Artifacts
+			}
+		}
+
+		arts, err := gatherForSync(s, syncGlobal, names)
 		if err != nil {
 			return err
 		}
-
 		scope := "project"
 		if syncGlobal {
 			scope = "global"
 		}
-		fmt.Printf("synced %d artifact(s) to %s (%s)\n", len(res.Written), syncAgent, scope)
-		for _, w := range res.Written {
-			fmt.Printf("  + %s\n", w)
-		}
-		for _, p := range res.Pruned {
-			fmt.Printf("  - pruned %s\n", p)
+		for _, agent := range agents {
+			res, err := deploy.Sync(s, arts, deploy.Options{
+				Agent:   agent,
+				BaseDir: base,
+				State:   statePath,
+				Link:    syncLink,
+				Force:   syncForce,
+				Set:     set,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("synced %d artifact(s) to %s (%s)\n", len(res.Written), agent, scope)
+			for _, w := range res.Written {
+				fmt.Printf("  + %s\n", w)
+			}
+			for _, p := range res.Pruned {
+				fmt.Printf("  - pruned %s\n", p)
+			}
 		}
 		return nil
 	},
+}
+
+// allArtifactNames returns the unique skill/command names in scope (for
+// `--save` with no explicit names).
+func allArtifactNames(s *store.Store, global bool) ([]string, error) {
+	arts, err := gatherForSync(s, global, nil)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var names []string
+	for _, a := range arts {
+		if !seen[a.Name] {
+			seen[a.Name] = true
+			names = append(names, a.Name)
+		}
+	}
+	return names, nil
 }
 
 var unsyncCmd = &cobra.Command{
@@ -176,6 +221,7 @@ func init() {
 	}
 	syncCmd.Flags().BoolVar(&syncLink, "link", false, "symlink static artifacts instead of rendering them")
 	syncCmd.Flags().BoolVar(&syncForce, "force", false, "overwrite existing files yori didn't create")
+	syncCmd.Flags().BoolVar(&syncSave, "save", false, "record the synced artifacts to .yori/sync.yaml")
 	syncCmd.Flags().StringArrayVar(&syncSet, "set", nil, "set a template variable (key=value), repeatable")
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(unsyncCmd)
