@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rovak/yori/internal/render"
-	"github.com/rovak/yori/internal/store"
+	"github.com/arjia-labs/yori/internal/render"
+	"github.com/arjia-labs/yori/internal/store"
 	"github.com/spf13/cobra"
 )
 

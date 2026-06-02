@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rovak/yori/internal/config"
-	"github.com/rovak/yori/internal/ident"
+	"github.com/arjia-labs/yori/internal/config"
+	"github.com/arjia-labs/yori/internal/ident"
 	"gopkg.in/yaml.v3"
 )
 

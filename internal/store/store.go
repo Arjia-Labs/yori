@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rovak/yori/internal/config"
-	"github.com/rovak/yori/internal/ident"
-	"github.com/rovak/yori/internal/registry"
+	"github.com/arjia-labs/yori/internal/config"
+	"github.com/arjia-labs/yori/internal/ident"
+	"github.com/arjia-labs/yori/internal/registry"
 )
 
 // ErrNotFound is returned when an artifact cannot be resolved in any layer.

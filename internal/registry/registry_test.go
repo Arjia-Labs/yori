@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rovak/yori/internal/config"
+	"github.com/arjia-labs/yori/internal/config"
 )
 
 func TestNameFromURL(t *testing.T) {

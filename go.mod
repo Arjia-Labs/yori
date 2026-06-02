@@ -1,4 +1,4 @@
-module github.com/rovak/yori
+module github.com/arjia-labs/yori
 
 go 1.26.3
 

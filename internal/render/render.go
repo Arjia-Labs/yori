@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/arjia-labs/yori/internal/store"
 	"github.com/osteele/liquid"
-	"github.com/rovak/yori/internal/store"
 )
 
 // Resolver loads partials and base artifacts during a render. *store.Store

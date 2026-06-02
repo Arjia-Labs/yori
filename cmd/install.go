@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/rovak/yori/internal/registry"
+	"github.com/arjia-labs/yori/internal/registry"
 	"github.com/spf13/cobra"
 )
 
