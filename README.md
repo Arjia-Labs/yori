@@ -50,6 +50,7 @@ cat bug.log | yori run triage --tone=blunt | claude
 | 🚰 **Pipe-first** | Reads stdin, writes stdout. `{{ input }}` captures piped text (or it's appended). Drops into any Unix pipeline. |
 | 🗂️ **Layered store** | A project `./.yori` shadows your global `~/.yori`, which is backed by installed packages — like a search path for prompts. |
 | 📦 **Git-as-registry** | `yori install <git-url>` to pull a team's shelf; `yori push` to publish yours. No server — git is the transport. |
+| 🔌 **Deploy to agents** | `yori sync` renders skills + commands into the dirs Claude Code (and more, soon) discover them from. Compose once, deploy everywhere. |
 | 🚫 **No model, no network telemetry** | Pure text transform. The only network use is git, when you ask for it. |
 
 ## 📦 Install
@@ -203,6 +204,27 @@ yori push                                 # subsequent pushes need no flags
 
 Installed packages are read-only layers, so `yori run review` falls through to a package if nothing local matches. Transport is plain `git` shelled out — no server to run, nothing extra to install.
 
+## 🔌 Use it with your agent (`yori sync`)
+
+A skill or command only helps if your coding agent can *find* it. `yori sync` materializes your skills and commands into the directories agents discover them from — rendering templates (vars, includes, slots) on the way, so you compose once and deploy everywhere.
+
+```bash
+yori sync                          # render skills + commands into ./.claude
+yori sync --global                 # into ~/.claude (personal, all projects)
+yori sync --set tone=blunt         # override template variables at deploy time
+yori sync --link                   # symlink static artifacts (live editing)
+yori unsync                        # remove everything sync placed
+```
+
+For Claude Code this writes:
+
+```
+.claude/skills/<name>/SKILL.md     # + any bundle support files, copied
+.claude/commands/<name>.md         # {{ input }} → $ARGUMENTS for the agent to fill
+```
+
+yori records what it wrote, so a re-sync **prunes** artifacts you've removed and refuses to clobber files it didn't create (use `--force` to override). This is the piece a plain installer can't do: the deployed skill is a *rendered, parameterized* copy of your source, not a raw file. (More agents — Codex, Cursor — and `agent`/subagent mapping are on the roadmap.)
+
 ## 📋 Command reference
 
 | command | what it does |
@@ -221,6 +243,8 @@ Installed packages are read-only layers, so `yori run review` falls through to a
 | `yori update [name]` | pull + re-pin installed packages |
 | `yori uninstall <name>` | remove an installed package |
 | `yori push` | publish the global store to a git remote (`--remote`, `-m`) |
+| `yori sync [names]` | render skills + commands into an agent's dirs (`--agent`, `--global`, `--link`, `--set`, `--force`) |
+| `yori unsync` | remove what `yori sync` placed (`--agent`, `--global`) |
 
 Shared flags: `--type`/`-t` selects the artifact type; `--global` targets `~/.yori` instead of the project.
 
@@ -233,4 +257,4 @@ Shared flags: `--type`/`-t` selects the artifact type; `--global` targets `~/.yo
 
 ## 🗺️ Roadmap
 
-Out of scope today, but the file layout leaves room for: lightweight evals (regression-test a prompt across versions), `.yori` project dependency hydration / lockfiles, multi-file skill bundles, and richer namespacing.
+Out of scope today, but the file layout leaves room for: lightweight evals (regression-test a prompt across versions), a declarative `.yori` sync manifest, `agent`/subagent mapping and more `yori sync` targets (Codex, Cursor), and richer namespacing.

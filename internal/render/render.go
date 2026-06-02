@@ -39,6 +39,10 @@ type Options struct {
 	Vars map[string]any
 	// Input is stdin / --file content bound to {{ input }}.
 	Input string
+	// NoAppend disables appending Input when the template doesn't reference it.
+	// Used when Input is a placeholder (e.g. an agent's $ARGUMENTS) that should
+	// only appear where {{ input }} is explicitly used.
+	NoAppend bool
 }
 
 // templateStore adapts a Resolver to liquid's TemplateStore, which is called
@@ -86,7 +90,7 @@ func Render(a *store.Artifact, resolver Resolver, opts Options) (string, error) 
 	}
 
 	rendered := string(out)
-	if opts.Input != "" && !inputRef.MatchString(body) {
+	if opts.Input != "" && !opts.NoAppend && !inputRef.MatchString(body) {
 		rendered = appendInput(rendered, opts.Input)
 	}
 	return rendered, nil

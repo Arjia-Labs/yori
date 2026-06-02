@@ -81,3 +81,17 @@ func ProjectStore() (string, error) {
 	}
 	return filepath.Join(root, "store"), nil
 }
+
+// ProjectRoot returns the directory containing the project's .yori (where
+// sibling agent dirs like .claude live), or "" if there is no project.
+func ProjectRoot() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	dir := FindProjectRoot(wd) // <root>/.yori
+	if dir == "" {
+		return "", nil
+	}
+	return filepath.Dir(dir), nil
+}
