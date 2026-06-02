@@ -51,6 +51,7 @@ cat bug.log | yori run triage --tone=blunt | claude
 | 🗂️ **Layered store** | A project `./.yori` shadows your global `~/.yori`, which is backed by installed packages — like a search path for prompts. |
 | 📦 **Git-as-registry** | `yori install <git-url>` to pull a team's shelf; `yori push` to publish yours. No server — git is the transport. |
 | 🔌 **Deploy to agents** | `yori sync` renders skills, commands, and subagents into the dirs Claude Code, Codex, and Cursor discover them from. Compose once, deploy everywhere. |
+| 🧪 **Eval via promptfoo** | `yori export promptfoo` turns a composed artifact + its cases into a promptfooconfig.yaml. yori manages and ships; promptfoo grades. |
 | 🚫 **No model, no network telemetry** | Pure text transform. The only network use is git, when you ask for it. |
 
 ## 📦 Install
@@ -238,6 +239,28 @@ agents: [claude-code]
 artifacts: [researcher, triage]
 ```
 
+## 🧪 Evaluate with promptfoo (`yori export`)
+
+yori is the source of truth for your prompts; for model-graded evaluation it hands off to [promptfoo](https://promptfoo.dev) rather than reinventing it. `yori export promptfoo <name>` resolves an artifact's composition (includes, slots) but leaves variables as `{{ placeholders }}`, and emits a ready-to-run config:
+
+```bash
+yori export promptfoo review > promptfooconfig.yaml
+promptfoo eval
+```
+
+Test cases live next to the artifact in `<name>.cases.yaml` (or `cases.yaml` in a skill bundle) — a plain list of promptfoo test objects, so authoring yori cases *is* authoring promptfoo tests:
+
+```yaml
+# review.cases.yaml
+- description: flags a real bug
+  vars: { lang: go, input: "func f() int { }" }
+  assert:
+    - { type: contains, value: "return" }
+    - { type: llm-rubric, value: "explains the root cause" }
+```
+
+The provider comes from `--provider` or the artifact's `model:` hint. yori *manages and ships* your prompts; promptfoo *grades* them.
+
 ## 📋 Command reference
 
 | command | what it does |
@@ -258,6 +281,7 @@ artifacts: [researcher, triage]
 | `yori push` | publish the global store to a git remote (`--remote`, `-m`) |
 | `yori sync [names]` | render skills + commands into an agent's dirs (`--agent`, `--global`, `--link`, `--set`, `--force`, `--save`) |
 | `yori unsync` | remove what `yori sync` placed (`--agent`, `--global`) |
+| `yori export promptfoo <name>` | generate a promptfooconfig.yaml for evaluation (`--provider`, `--type`) |
 
 Shared flags: `--type`/`-t` selects the artifact type; `--global` targets `~/.yori` instead of the project.
 
