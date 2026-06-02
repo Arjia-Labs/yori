@@ -68,9 +68,10 @@ func TestInvalidPersistedNameQuarantined(t *testing.T) {
 	if dirs := idx.Dirs(); len(dirs) != 0 {
 		t.Errorf("Dirs() = %+v, want none (invalid entry excluded)", dirs)
 	}
-	// update-all skips it without trying to git-pull an untrusted path.
-	if err := idx.Update(""); err != nil {
-		t.Errorf("Update(all) should skip invalid entries: %v", err)
+	// update-all skips it without trying to git-pull an untrusted path, and
+	// reports zero updated (not one).
+	if n, err := idx.Update(""); err != nil || n != 0 {
+		t.Errorf("Update(all): n=%d err=%v, want 0 updated and no error", n, err)
 	}
 	// But it can still be cleaned up by name, with no filesystem operation.
 	if idx.Find("../evil") == nil {

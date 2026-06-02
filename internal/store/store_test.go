@@ -266,4 +266,18 @@ func TestReadPartial(t *testing.T) {
 			t.Errorf("%s: got %q", name, data)
 		}
 	}
+
+	// A dotted name must not be truncated at the dot: style.v1 resolves
+	// style.v1.md, not style.md.
+	writeFile(t, filepath.Join(global, partialsDir, "style.md"), "base")
+	writeFile(t, filepath.Join(global, partialsDir, "style.v1.md"), "v1")
+	for name, want := range map[string]string{"style": "base", "style.v1": "v1", "style.v1.md": "v1"} {
+		data, err := s.ReadPartial(name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if string(data) != want {
+			t.Errorf("partial %q = %q, want %q", name, data, want)
+		}
+	}
 }

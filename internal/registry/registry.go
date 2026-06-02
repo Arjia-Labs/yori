@@ -155,12 +155,16 @@ func (i *Index) Uninstall(name string) error {
 }
 
 // Update pulls a package (or all packages when name is "") and re-pins commits.
-func (i *Index) Update(name string) error {
+// Update pulls a package (or all packages when name is "") and re-pins commits.
+// It returns the number of packages actually updated (skipped invalid entries
+// are not counted).
+func (i *Index) Update(name string) (int, error) {
 	if name != "" {
 		if err := ident.Validate("package", name); err != nil {
-			return err
+			return 0, err
 		}
 	}
+	updated := 0
 	for idx := range i.Packages {
 		p := &i.Packages[idx]
 		if name != "" && p.Name != name {
@@ -173,14 +177,15 @@ func (i *Index) Update(name string) error {
 		}
 		commit, err := Pull(i.Dir(p.Name))
 		if err != nil {
-			return fmt.Errorf("update %s: %w", p.Name, err)
+			return updated, fmt.Errorf("update %s: %w", p.Name, err)
 		}
 		p.Commit = commit
+		updated++
 	}
 	if name != "" && i.Find(name) == nil {
-		return fmt.Errorf("package %q is not installed", name)
+		return updated, fmt.Errorf("package %q is not installed", name)
 	}
-	return i.Save()
+	return updated, i.Save()
 }
 
 // NameFromURL derives a package name from a git URL's last path segment.

@@ -236,11 +236,18 @@ func (s *Store) ResolveGlobal(typ Type, name string) (*Artifact, error) {
 	return a, nil
 }
 
+// partialBase reduces an include reference to a partial name: it drops any
+// leading directory and a trailing ".md", but preserves dotted name segments
+// (so `style.v1` resolves partials/style.v1.md, not partials/style.md).
+func partialBase(name string) string {
+	return strings.TrimSuffix(filepath.Base(name), ".md")
+}
+
 // ReadPartial resolves a partial by base name through the layered stores.
 // The lookup ignores any directory/extension on name so Liquid's
 // `{% include 'house' %}` and `{% include 'partials/house.md' %}` both work.
 func (s *Store) ReadPartial(name string) ([]byte, error) {
-	base := strings.TrimSuffix(filepath.Base(name), filepath.Ext(name))
+	base := partialBase(name)
 	for _, l := range s.layers() {
 		path := filepath.Join(l.dir, partialsDir, base+".md")
 		data, err := os.ReadFile(path)
@@ -263,7 +270,7 @@ func (s *Store) ReadPartialIn(pkg, name string) ([]byte, error) {
 	if l == nil {
 		return nil, fmt.Errorf("no installed package %q", pkg)
 	}
-	base := strings.TrimSuffix(filepath.Base(name), filepath.Ext(name))
+	base := partialBase(name)
 	data, err := os.ReadFile(filepath.Join(l.dir, partialsDir, base+".md"))
 	if err != nil {
 		if os.IsNotExist(err) {

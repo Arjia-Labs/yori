@@ -71,13 +71,14 @@ var updateCmd = &cobra.Command{
 		if len(args) == 1 {
 			name = args[0]
 		}
-		if err := idx.Update(name); err != nil {
+		n, err := idx.Update(name)
+		if err != nil {
 			return err
 		}
 		if name != "" {
 			fmt.Printf("updated %s @ %s\n", name, idx.Find(name).Commit)
 		} else {
-			fmt.Printf("updated %d package(s)\n", len(idx.Packages))
+			fmt.Printf("updated %d package(s)\n", n)
 		}
 		return nil
 	},

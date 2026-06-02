@@ -212,5 +212,13 @@ func readInput(file string) (string, error) {
 }
 
 func init() {
+	// run hand-parses its args (DisableFlagParsing) to allow dynamic --<var>
+	// flags, but we still register the reserved flags so they show up in
+	// `yori run --help` and shell completion. Their values are read by
+	// parseRunArgs, not by cobra.
+	runCmd.Flags().StringP("type", "t", "prompt", "artifact type: prompt|agent|command|skill")
+	runCmd.Flags().Bool("global", false, "render the global artifact only")
+	runCmd.Flags().String("file", "", "read {{ input }} from a file")
+	runCmd.Flags().StringArray("set", nil, "set a variable (key=value), repeatable")
 	rootCmd.AddCommand(runCmd)
 }
