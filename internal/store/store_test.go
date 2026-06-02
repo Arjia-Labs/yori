@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -109,7 +110,7 @@ func TestTypedStorage(t *testing.T) {
 			t.Errorf("type = %q want %q", a.Type, typ)
 		}
 		wantSub := typ.subdir()
-		if wantSub != "" && !contains(a.Path, wantSub) {
+		if wantSub != "" && !strings.Contains(a.Path, "/"+wantSub+"/") {
 			t.Errorf("%s path %q missing subdir %q", typ, a.Path, wantSub)
 		}
 	}
@@ -131,8 +132,57 @@ func TestTypedStorage(t *testing.T) {
 	}
 }
 
-func contains(s, sub string) bool {
-	return filepath.Base(filepath.Dir(s)) == sub
+func TestSkillBundles(t *testing.T) {
+	dir := t.TempDir()
+	s := &Store{globalStore: filepath.Join(dir, "store")}
+
+	// add --type skill creates a bundle: skills/<name>/SKILL.md.
+	path, err := s.Save(TypeSkill, "researcher", Scaffold("researcher", TypeSkill), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(path) != "SKILL.md" || filepath.Base(filepath.Dir(path)) != "researcher" {
+		t.Errorf("bundle path = %q", path)
+	}
+	// A supporting file alongside SKILL.md.
+	if err := os.WriteFile(filepath.Join(filepath.Dir(path), "helper.py"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	a, err := s.Resolve(TypeSkill, "researcher")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Name != "researcher" {
+		t.Errorf("name = %q (should come from the bundle dir, not 'SKILL')", a.Name)
+	}
+	if a.BundleDir != filepath.Dir(path) {
+		t.Errorf("BundleDir = %q", a.BundleDir)
+	}
+
+	// A single-file skill still resolves (and the bundle wins when both exist).
+	single := filepath.Join(dir, "store", "skills", "legacy.md")
+	writeFile(t, single, "---\nname: legacy\n---\nbody")
+	if a, err := s.Resolve(TypeSkill, "legacy"); err != nil || a.BundleDir != "" {
+		t.Errorf("single-file skill: err=%v bundleDir=%q", err, a.BundleDir)
+	}
+
+	// List shows both, once each.
+	skills, err := s.List(TypeSkill, true, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 2 {
+		t.Errorf("list skills = %d (%+v)", len(skills), skills)
+	}
+
+	// Delete removes the whole bundle directory.
+	if err := s.Delete(TypeSkill, "researcher", true); err != nil {
+		t.Fatal(err)
+	}
+	if Exists(filepath.Dir(path)) {
+		t.Errorf("bundle dir not removed")
+	}
 }
 
 func TestRejectTraversalNames(t *testing.T) {

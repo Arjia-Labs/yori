@@ -89,9 +89,77 @@ func (s *Store) StoreDir(global bool) (string, error) {
 	return s.projectStore, nil
 }
 
-// fileFor returns the file path for a typed artifact within a store dir.
+// skillFile is the entry file of a skill bundle directory.
+const skillFile = "SKILL.md"
+
+// fileFor returns the single-file path for a typed artifact within a store dir.
 func fileFor(dir string, typ Type, name string) string {
 	return filepath.Join(dir, typ.subdir(), name+".md")
+}
+
+// candidates returns possible on-disk paths for (typ, name) in a store dir, in
+// priority order. Skills may be a directory bundle (skills/<name>/SKILL.md) or
+// a single file (skills/<name>.md); the bundle wins.
+func candidates(dir string, typ Type, name string) []string {
+	if typ == TypeSkill {
+		return []string{
+			filepath.Join(dir, typ.subdir(), name, skillFile),
+			fileFor(dir, typ, name),
+		}
+	}
+	return []string{fileFor(dir, typ, name)}
+}
+
+// findExisting returns the first candidate path that exists.
+func findExisting(dir string, typ Type, name string) (string, bool) {
+	for _, c := range candidates(dir, typ, name) {
+		if Exists(c) {
+			return c, true
+		}
+	}
+	return "", false
+}
+
+// createPath is where a new artifact is written (skills become bundles).
+func createPath(dir string, typ Type, name string) string {
+	if typ == TypeSkill {
+		return filepath.Join(dir, typ.subdir(), name, skillFile)
+	}
+	return fileFor(dir, typ, name)
+}
+
+// writePath returns the existing path if the artifact already exists, else the
+// canonical creation path. Used by FilePath and Save so they agree.
+func writePath(dir string, typ Type, name string) string {
+	if p, ok := findExisting(dir, typ, name); ok {
+		return p
+	}
+	return createPath(dir, typ, name)
+}
+
+// isBundlePath reports whether path is a skill bundle's SKILL.md.
+func isBundlePath(path string) bool {
+	return filepath.Base(path) == skillFile
+}
+
+// loadArtifactFile reads and parses an artifact, filling bundle metadata.
+func loadArtifactFile(path string) (*Artifact, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	a, err := parseArtifact(data, path)
+	if err != nil {
+		return nil, err
+	}
+	if isBundlePath(path) {
+		a.BundleDir = filepath.Dir(path)
+		// parseArtifact's filename fallback yields "SKILL"; use the bundle name.
+		if a.Name == "SKILL" {
+			a.Name = filepath.Base(a.BundleDir)
+		}
+	}
+	return a, nil
 }
 
 // FilePath returns the on-disk path an artifact would have in the given scope,
@@ -104,7 +172,7 @@ func (s *Store) FilePath(typ Type, name string, global bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fileFor(dir, typ, name), nil
+	return writePath(dir, typ, name), nil
 }
 
 // Exists reports whether a file exists at path.
@@ -130,15 +198,11 @@ func (s *Store) Resolve(typ Type, name string) (*Artifact, error) {
 		return nil, err
 	}
 	for _, l := range searchLayers {
-		path := fileFor(l.dir, typ, name)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, err
+		path, ok := findExisting(l.dir, typ, name)
+		if !ok {
+			continue
 		}
-		a, err := parseArtifact(data, path)
+		a, err := loadArtifactFile(path)
 		if err != nil {
 			return nil, err
 		}
@@ -159,15 +223,11 @@ func (s *Store) ResolveGlobal(typ Type, name string) (*Artifact, error) {
 	if err := ident.ValidatePath("artifact", name); err != nil {
 		return nil, err
 	}
-	path := fileFor(s.globalStore, typ, name)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("%s %q: %w", typ, name, ErrNotFound)
-		}
-		return nil, err
+	path, ok := findExisting(s.globalStore, typ, name)
+	if !ok {
+		return nil, fmt.Errorf("%s %q: %w", typ, name, ErrNotFound)
 	}
-	a, err := parseArtifact(data, path)
+	a, err := loadArtifactFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -243,22 +303,30 @@ func (s *Store) List(typ Type, global bool, tag string) ([]*Artifact, error) {
 				return nil, err
 			}
 			for _, e := range entries {
-				if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+				var name, path string
+				switch {
+				case e.IsDir():
+					// A skill bundle: skills/<name>/SKILL.md.
+					bundle := filepath.Join(dir, e.Name(), skillFile)
+					if t == TypeSkill && Exists(bundle) {
+						name, path = e.Name(), bundle
+					} else {
+						continue
+					}
+				case strings.HasSuffix(e.Name(), ".md"):
+					name = strings.TrimSuffix(e.Name(), ".md")
+					path = filepath.Join(dir, e.Name())
+				default:
 					continue
 				}
-				name := strings.TrimSuffix(e.Name(), ".md")
+
 				key := string(t) + "/" + name
 				if seen[key] {
 					continue // shadowed by a higher layer
 				}
 				seen[key] = true
 
-				path := filepath.Join(dir, e.Name())
-				data, err := os.ReadFile(path)
-				if err != nil {
-					return nil, err
-				}
-				a, err := parseArtifact(data, path)
+				a, err := loadArtifactFile(path)
 				if err != nil {
 					// One malformed file shouldn't break the whole listing.
 					fmt.Fprintf(os.Stderr, "yori: skipping %s: %v\n", path, err)
@@ -300,7 +368,7 @@ func (s *Store) Save(typ Type, name string, content []byte, global bool) (string
 	if err != nil {
 		return "", err
 	}
-	path := fileFor(dir, typ, name)
+	path := writePath(dir, typ, name)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
@@ -319,14 +387,15 @@ func (s *Store) Delete(typ Type, name string, global bool) error {
 	if err != nil {
 		return err
 	}
-	path := fileFor(dir, typ, name)
-	if err := os.Remove(path); err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("%s %q: %w", typ, name, ErrNotFound)
-		}
-		return err
+	path, ok := findExisting(dir, typ, name)
+	if !ok {
+		return fmt.Errorf("%s %q: %w", typ, name, ErrNotFound)
 	}
-	return nil
+	if isBundlePath(path) {
+		// Remove the whole skill bundle directory.
+		return os.RemoveAll(filepath.Dir(path))
+	}
+	return os.Remove(path)
 }
 
 // Init creates the store and partials directories for the given scope.
