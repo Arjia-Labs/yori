@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	syncAgent  string
+	syncAgents []string
 	syncGlobal bool
 	syncLink   bool
 	syncForce  bool
@@ -49,7 +49,7 @@ removed artifacts and 'yori unsync' cleans everything up.`,
 		manifestPath := filepath.Join(filepath.Dir(statePath), "sync.yaml")
 
 		// Decide the target agents and artifact names from flags / manifest.
-		agents := []string{syncAgent}
+		agents := syncAgents
 		names := args
 
 		switch {
@@ -59,7 +59,7 @@ removed artifacts and 'yori unsync' cleans everything up.`,
 					return err
 				}
 			}
-			m := &deploy.Manifest{Agents: []string{syncAgent}, Artifacts: names}
+			m := &deploy.Manifest{Agents: syncAgents, Artifacts: names}
 			if err := m.Save(manifestPath); err != nil {
 				return err
 			}
@@ -68,7 +68,10 @@ removed artifacts and 'yori unsync' cleans everything up.`,
 			if m, ok, err := deploy.LoadManifest(manifestPath); err != nil {
 				return err
 			} else if ok {
-				agents, names = m.Agents, m.Artifacts
+				names = m.Artifacts
+				if !cmd.Flags().Changed("agent") {
+					agents = m.Agents // manifest agents unless overridden on the CLI
+				}
 			}
 		}
 
@@ -80,10 +83,11 @@ removed artifacts and 'yori unsync' cleans everything up.`,
 		if syncGlobal {
 			scope = "global"
 		}
-		for _, agent := range agents {
+		for _, agent := range deploy.ExpandAgents(agents) {
 			res, err := deploy.Sync(s, arts, deploy.Options{
 				Agent:   agent,
 				BaseDir: base,
+				Global:  syncGlobal,
 				State:   statePath,
 				Link:    syncLink,
 				Force:   syncForce,
@@ -98,6 +102,9 @@ removed artifacts and 'yori unsync' cleans everything up.`,
 			}
 			for _, p := range res.Pruned {
 				fmt.Printf("  - pruned %s\n", p)
+			}
+			for _, sk := range res.Skipped {
+				fmt.Printf("  · skipped %s (unsupported by %s at %s scope)\n", sk, agent, scope)
 			}
 		}
 		return nil
@@ -131,13 +138,15 @@ var unsyncCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		removed, err := deploy.Unsync(deploy.Options{Agent: syncAgent, State: statePath})
-		if err != nil {
-			return err
-		}
-		fmt.Printf("removed %d synced artifact(s)\n", len(removed))
-		for _, r := range removed {
-			fmt.Printf("  - %s\n", r)
+		for _, agent := range deploy.ExpandAgents(syncAgents) {
+			removed, err := deploy.Unsync(deploy.Options{Agent: agent, State: statePath})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("removed %d synced artifact(s) for %s\n", len(removed), agent)
+			for _, r := range removed {
+				fmt.Printf("  - %s\n", r)
+			}
 		}
 		return nil
 	},
@@ -154,7 +163,7 @@ func gatherForSync(s *store.Store, global bool, names []string) ([]*store.Artifa
 	matched := map[string]bool{}
 
 	var arts []*store.Artifact
-	for _, typ := range []store.Type{store.TypeSkill, store.TypeCommand} {
+	for _, typ := range []store.Type{store.TypeSkill, store.TypeCommand, store.TypeAgent} {
 		list, err := s.List(typ, global, "")
 		if err != nil {
 			return nil, err
@@ -172,7 +181,7 @@ func gatherForSync(s *store.Store, global bool, names []string) ([]*store.Artifa
 	}
 	for n := range want {
 		if !matched[n] {
-			return nil, fmt.Errorf("no skill or command named %q to sync", n)
+			return nil, fmt.Errorf("no skill, command, or agent named %q to sync", n)
 		}
 	}
 	return arts, nil
@@ -216,7 +225,7 @@ func parseSet(pairs []string) (map[string]string, error) {
 
 func init() {
 	for _, c := range []*cobra.Command{syncCmd, unsyncCmd} {
-		c.Flags().StringVarP(&syncAgent, "agent", "a", "claude-code", "target agent: "+strings.Join(deploy.AgentNames(), ", "))
+		c.Flags().StringArrayVarP(&syncAgents, "agent", "a", []string{"claude-code"}, "target agent (repeatable, '*' = all): "+strings.Join(deploy.AgentNames(), ", "))
 		c.Flags().BoolVar(&syncGlobal, "global", false, "sync the global store into the agent's global dir (~)")
 	}
 	syncCmd.Flags().BoolVar(&syncLink, "link", false, "symlink static artifacts instead of rendering them")

@@ -141,6 +141,68 @@ func TestSyncLink(t *testing.T) {
 	}
 }
 
+func TestExpandAgents(t *testing.T) {
+	if got := ExpandAgents([]string{"*"}); len(got) != len(Agents) {
+		t.Errorf("'*' expanded to %v, want %d agents", got, len(Agents))
+	}
+	if got := ExpandAgents([]string{"claude-code"}); len(got) != 1 || got[0] != "claude-code" {
+		t.Errorf("explicit agents changed: %v", got)
+	}
+}
+
+func TestSubagentFrontmatter(t *testing.T) {
+	base := t.TempDir()
+	agent := &store.Artifact{
+		Name: "pr-bot", Type: store.TypeAgent, Path: "/x/pr-bot.md",
+		Description: "reviews PRs", Model: "claude-opus-4-8",
+		Body: "You are a PR reviewer.",
+	}
+	if _, err := Sync(noResolver{}, []*store.Artifact{agent}, claudeOpts(base, filepath.Join(t.TempDir(), "s.json"))); err != nil {
+		t.Fatal(err)
+	}
+	out := read(t, filepath.Join(base, ".claude/agents/pr-bot.md"))
+	for _, want := range []string{"---", "name: pr-bot", "description: reviews PRs", "model: claude-opus-4-8", "You are a PR reviewer."} {
+		if !strings.Contains(out, want) {
+			t.Errorf("subagent file missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestScopeAwareSkipAndPlacement(t *testing.T) {
+	cmd := &store.Artifact{Name: "deploy", Type: store.TypeCommand, Path: "/x/deploy.md", Body: "Deploy: {{ input }}"}
+
+	// Codex has no project-scope prompt dir → skipped, nothing written.
+	base := t.TempDir()
+	res, err := Sync(noResolver{}, []*store.Artifact{cmd}, Options{Agent: "codex", BaseDir: base, State: filepath.Join(t.TempDir(), "s.json")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Written) != 0 || len(res.Skipped) != 1 {
+		t.Errorf("codex project: written=%v skipped=%v", res.Written, res.Skipped)
+	}
+
+	// At global scope it lands in .codex/prompts.
+	gbase := t.TempDir()
+	if _, err := Sync(noResolver{}, []*store.Artifact{cmd}, Options{Agent: "codex", BaseDir: gbase, Global: true, State: filepath.Join(t.TempDir(), "s.json")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(read(t, filepath.Join(gbase, ".codex/prompts/deploy.md"))); got != "Deploy: $ARGUMENTS" {
+		t.Errorf("codex global command = %q", got)
+	}
+}
+
+func TestCodexSkillPlacement(t *testing.T) {
+	base := t.TempDir()
+	bundle := t.TempDir()
+	skill := &store.Artifact{Name: "researcher", Type: store.TypeSkill, Path: filepath.Join(bundle, "SKILL.md"), BundleDir: bundle, Body: "body"}
+	if _, err := Sync(noResolver{}, []*store.Artifact{skill}, Options{Agent: "codex", BaseDir: base, State: filepath.Join(t.TempDir(), "s.json")}); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Join(base, ".agents/skills/researcher/SKILL.md")) {
+		t.Errorf("codex skill not at .agents/skills")
+	}
+}
+
 func TestUnsync(t *testing.T) {
 	base := t.TempDir()
 	state := filepath.Join(t.TempDir(), "s.json")

@@ -50,7 +50,7 @@ cat bug.log | yori run triage --tone=blunt | claude
 | 🚰 **Pipe-first** | Reads stdin, writes stdout. `{{ input }}` captures piped text (or it's appended). Drops into any Unix pipeline. |
 | 🗂️ **Layered store** | A project `./.yori` shadows your global `~/.yori`, which is backed by installed packages — like a search path for prompts. |
 | 📦 **Git-as-registry** | `yori install <git-url>` to pull a team's shelf; `yori push` to publish yours. No server — git is the transport. |
-| 🔌 **Deploy to agents** | `yori sync` renders skills + commands into the dirs Claude Code (and more, soon) discover them from. Compose once, deploy everywhere. |
+| 🔌 **Deploy to agents** | `yori sync` renders skills, commands, and subagents into the dirs Claude Code, Codex, and Cursor discover them from. Compose once, deploy everywhere. |
 | 🚫 **No model, no network telemetry** | Pure text transform. The only network use is git, when you ask for it. |
 
 ## 📦 Install
@@ -209,21 +209,26 @@ Installed packages are read-only layers, so `yori run review` falls through to a
 A skill or command only helps if your coding agent can *find* it. `yori sync` materializes your skills and commands into the directories agents discover them from — rendering templates (vars, includes, slots) on the way, so you compose once and deploy everywhere.
 
 ```bash
-yori sync                          # render skills + commands into ./.claude
-yori sync --global                 # into ~/.claude (personal, all projects)
+yori sync                          # render into ./.claude (Claude Code, default)
+yori sync -a codex -a cursor       # target specific agents (repeatable)
+yori sync -a '*'                   # every supported agent
+yori sync --global                 # into the agent's global dir (personal)
 yori sync --set tone=blunt         # override template variables at deploy time
 yori sync --link                   # symlink static artifacts (live editing)
-yori unsync                        # remove everything sync placed
+yori unsync -a '*'                 # remove everything sync placed
 ```
 
-For Claude Code this writes:
+Supported agents and where each type lands (project scope shown; `--global` uses the personal dir):
 
-```
-.claude/skills/<name>/SKILL.md     # + any bundle support files, copied
-.claude/commands/<name>.md         # {{ input }} → $ARGUMENTS for the agent to fill
-```
+| | skill | command | agent / subagent |
+|---|---|---|---|
+| **claude-code** | `.claude/skills/<n>/SKILL.md` | `.claude/commands/<n>.md` | `.claude/agents/<n>.md` |
+| **codex** | `.agents/skills/<n>/SKILL.md` | `~/.codex/prompts/<n>.md` *(global only)* | — |
+| **cursor** | — | `.cursor/commands/<n>.md` | — |
 
-yori records what it wrote, so a re-sync **prunes** artifacts you've removed and refuses to clobber files it didn't create (use `--force` to override). This is the piece a plain installer can't do: the deployed skill is a *rendered, parameterized* copy of your source, not a raw file. (More agents — Codex, Cursor — and `agent`/subagent mapping are on the roadmap.)
+Skills carry their bundle support files; a command's `{{ input }}` becomes the agent's argument token (`$ARGUMENTS`); a yori `agent` becomes a Claude subagent with `name`/`description`/`model` frontmatter. Combinations an agent doesn't support are skipped with a note, never an error.
+
+yori records what it wrote, so a re-sync **prunes** artifacts you've removed and refuses to clobber files it didn't create (use `--force` to override). This is the piece a plain installer can't do: the deployed skill is a *rendered, parameterized* copy of your source, not a raw file.
 
 **Make it reproducible.** `yori sync --save` records the chosen artifacts to a committed `.yori/sync.yaml`. Then a teammate clones the repo and runs a bare `yori sync` to hydrate the project's whole agent setup in one command:
 
@@ -265,4 +270,4 @@ Shared flags: `--type`/`-t` selects the artifact type; `--global` targets `~/.yo
 
 ## 🗺️ Roadmap
 
-Out of scope today, but the file layout leaves room for: lightweight evals (regression-test a prompt across versions), a declarative `.yori` sync manifest, `agent`/subagent mapping and more `yori sync` targets (Codex, Cursor), and richer namespacing.
+Out of scope today, but the file layout leaves room for: lightweight evals (regression-test a prompt across versions), a render-once → symlink-many sync mode for multi-agent setups, more agent targets, and richer namespacing.

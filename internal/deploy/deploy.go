@@ -14,25 +14,49 @@ import (
 
 	"github.com/arjia-labs/yori/internal/render"
 	"github.com/arjia-labs/yori/internal/store"
+	"gopkg.in/yaml.v3"
 )
 
-// Agent maps artifact types to an agent's discovery directories, relative to a
-// base (the project root, or the home dir for global installs).
-type Agent struct {
-	Name        string
-	SkillsDir   string // e.g. ".claude/skills"
-	CommandsDir string // e.g. ".claude/commands"
-	// ArgPlaceholder is what {{ input }} in a command renders to, so the agent
-	// fills the argument at invocation rather than yori at sync time.
-	ArgPlaceholder string
+// Target describes where one artifact type lands for an agent, relative to a
+// base (project root, or home dir for --global). A dir of "" means the agent
+// doesn't support that type at that scope, so it's skipped.
+type Target struct {
+	ProjectDir string // relative to the project root
+	GlobalDir  string // relative to the home dir
+	Bundle     bool   // true for skill bundles: write <dir>/<name>/SKILL.md
+	ArgToken   string // {{ input }} placeholder for commands ("" = none)
 }
 
-// Agents is the registry of supported targets.
+func (t Target) dir(global bool) string {
+	if global {
+		return t.GlobalDir
+	}
+	return t.ProjectDir
+}
+
+// Agent maps artifact types to their discovery targets.
+type Agent struct {
+	Name    string
+	Targets map[store.Type]Target
+}
+
+// Agents is the registry of supported targets, with verified conventions.
 var Agents = map[string]Agent{
-	"claude-code": {
-		Name: "claude-code", SkillsDir: ".claude/skills", CommandsDir: ".claude/commands",
-		ArgPlaceholder: "$ARGUMENTS",
-	},
+	"claude-code": {Name: "claude-code", Targets: map[store.Type]Target{
+		store.TypeSkill:   {ProjectDir: ".claude/skills", GlobalDir: ".claude/skills", Bundle: true},
+		store.TypeCommand: {ProjectDir: ".claude/commands", GlobalDir: ".claude/commands", ArgToken: "$ARGUMENTS"},
+		store.TypeAgent:   {ProjectDir: ".claude/agents", GlobalDir: ".claude/agents"},
+	}},
+	// Codex: skills live in .agents/skills at both scopes; custom prompts are
+	// global-only (~/.codex/prompts); no per-agent file (AGENTS.md is aggregate).
+	"codex": {Name: "codex", Targets: map[store.Type]Target{
+		store.TypeSkill:   {ProjectDir: ".agents/skills", GlobalDir: ".agents/skills", Bundle: true},
+		store.TypeCommand: {ProjectDir: "", GlobalDir: ".codex/prompts", ArgToken: "$ARGUMENTS"},
+	}},
+	// Cursor: custom commands at .cursor/commands (project + global).
+	"cursor": {Name: "cursor", Targets: map[store.Type]Target{
+		store.TypeCommand: {ProjectDir: ".cursor/commands", GlobalDir: ".cursor/commands"},
+	}},
 }
 
 // AgentNames returns the supported agent identifiers, sorted.
@@ -45,10 +69,21 @@ func AgentNames() []string {
 	return names
 }
 
+// ExpandAgents resolves an agent list, expanding "*" to every supported agent.
+func ExpandAgents(list []string) []string {
+	for _, a := range list {
+		if a == "*" {
+			return AgentNames()
+		}
+	}
+	return list
+}
+
 // Options configures a sync.
 type Options struct {
 	Agent   string            // target agent identifier
 	BaseDir string            // where agent dirs live (project root or home)
+	Global  bool              // global scope (selects GlobalDir targets)
 	State   string            // path to the sync-state file
 	Link    bool              // symlink instead of render+copy (static artifacts only)
 	Force   bool              // overwrite files yori didn't create
@@ -59,10 +94,12 @@ type Options struct {
 type Result struct {
 	Written []string // artifact labels written this run
 	Pruned  []string // target paths removed because their source is gone
+	Skipped []string // artifacts this agent doesn't support at this scope
 }
 
 // Sync renders and places the given artifacts, pruning previously-synced
-// targets that are no longer present. arts should contain skills and commands.
+// targets that are no longer present. Artifacts the agent doesn't support at
+// the chosen scope are skipped (and reported), not an error.
 func Sync(rs render.Resolver, arts []*store.Artifact, opts Options) (*Result, error) {
 	agent, ok := Agents[opts.Agent]
 	if !ok {
@@ -79,9 +116,10 @@ func Sync(rs render.Resolver, arts []*store.Artifact, opts Options) (*Result, er
 	current := map[string]bool{}
 
 	for _, a := range arts {
-		target, err := targetPath(agent, opts.BaseDir, a)
-		if err != nil {
-			return nil, err
+		target, ok := managedPath(agent, a, opts.BaseDir, opts.Global)
+		if !ok {
+			res.Skipped = append(res.Skipped, string(a.Type)+":"+a.Name)
+			continue
 		}
 		if err := guardClobber(target, prev, opts.Force); err != nil {
 			return nil, err
@@ -135,36 +173,49 @@ func Unsync(opts Options) ([]string, error) {
 	return removed, nil
 }
 
-// targetPath is the path yori manages for an artifact: a skill's bundle dir or
-// a command's file.
-func targetPath(agent Agent, base string, a *store.Artifact) (string, error) {
-	switch a.Type {
-	case store.TypeSkill:
-		return filepath.Join(base, agent.SkillsDir, a.Name), nil
-	case store.TypeCommand:
-		return filepath.Join(base, agent.CommandsDir, a.Name+".md"), nil
-	default:
-		return "", fmt.Errorf("agent %q does not support type %q", agent.Name, a.Type)
+// managedPath is the path yori manages for an artifact under the given agent
+// and scope: a skill's bundle dir, or a command/agent file. ok is false when
+// the agent doesn't support the type at that scope.
+func managedPath(agent Agent, a *store.Artifact, base string, global bool) (string, bool) {
+	t, ok := agent.Targets[a.Type]
+	if !ok {
+		return "", false
 	}
+	dir := t.dir(global)
+	if dir == "" {
+		return "", false
+	}
+	if t.Bundle {
+		return filepath.Join(base, dir, a.Name), true
+	}
+	return filepath.Join(base, dir, a.Name+".md"), true
 }
 
 // place writes one artifact to target (render+copy, or symlink with --link).
 func place(rs render.Resolver, a *store.Artifact, target string, agent Agent, opts Options) error {
+	t := agent.Targets[a.Type]
 	if opts.Link {
-		return link(a, target)
+		return link(a, target, t.Bundle)
 	}
 	// A command's {{ input }} is the argument the agent fills at invocation, so
 	// render it to the agent's placeholder rather than to empty.
 	var inputArg string
 	if a.Type == store.TypeCommand {
-		inputArg = agent.ArgPlaceholder
+		inputArg = t.ArgToken
 	}
 	body, err := renderArtifact(rs, a, opts.Set, inputArg)
 	if err != nil {
 		return err
 	}
-	switch a.Type {
-	case store.TypeSkill:
+	// A subagent file carries its own frontmatter (name/description/model).
+	if a.Type == store.TypeAgent {
+		body, err = subagentFile(a, body)
+		if err != nil {
+			return err
+		}
+	}
+
+	if t.Bundle {
 		if err := os.RemoveAll(target); err != nil {
 			return err
 		}
@@ -175,17 +226,30 @@ func place(rs render.Resolver, a *store.Artifact, target string, agent Agent, op
 			return err
 		}
 		return copySupportFiles(a.BundleDir, target)
-	case store.TypeCommand:
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
-		return os.WriteFile(target, []byte(body), 0o644)
 	}
-	return fmt.Errorf("unsupported type %q", a.Type)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(target, []byte(body), 0o644)
+}
+
+// subagentFile prepends Claude subagent frontmatter (name, description, model)
+// to a rendered agent body.
+func subagentFile(a *store.Artifact, body string) (string, error) {
+	fm := struct {
+		Name        string `yaml:"name"`
+		Description string `yaml:"description,omitempty"`
+		Model       string `yaml:"model,omitempty"`
+	}{a.Name, a.Description, a.Model}
+	out, err := yaml.Marshal(fm)
+	if err != nil {
+		return "", err
+	}
+	return "---\n" + string(out) + "---\n\n" + body, nil
 }
 
 // link symlinks a static (non-templated) artifact to target.
-func link(a *store.Artifact, target string) error {
+func link(a *store.Artifact, target string, bundle bool) error {
 	if hasTemplate(a.Body) {
 		return fmt.Errorf("%q uses template syntax and can't be linked; sync without --link to render it", a.Name)
 	}
@@ -196,7 +260,7 @@ func link(a *store.Artifact, target string) error {
 		return err
 	}
 	src := a.Path
-	if a.Type == store.TypeSkill && a.BundleDir != "" {
+	if bundle && a.BundleDir != "" {
 		src = a.BundleDir // link the whole bundle dir as .../skills/<name>
 	}
 	return os.Symlink(src, target)
