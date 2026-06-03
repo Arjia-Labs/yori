@@ -149,3 +149,27 @@ func load(s resolver, pkg string, n Node) (body, extends string, ok bool) {
 func partialBase(name string) string {
 	return strings.TrimSuffix(filepath.Base(name), ".md")
 }
+
+// Direct returns an artifact's immediate dependencies: the base it extends (if
+// any) and the partials it directly includes. Used for manifest generation,
+// where transitivity is recovered by resolving each dependency item.
+func Direct(a *store.Artifact) (bases, partials []string) {
+	if a.Extends != "" {
+		bases = append(bases, a.Extends)
+	}
+	return bases, DirectIncludes(a.Body)
+}
+
+// DirectIncludes returns the partial names a body directly includes.
+func DirectIncludes(body string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, m := range includeRe.FindAllStringSubmatch(body, -1) {
+		n := partialBase(m[1])
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
+}
