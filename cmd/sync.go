@@ -19,7 +19,19 @@ var (
 	syncForce  bool
 	syncSave   bool
 	syncSet    []string
+	syncTags   []string
 )
+
+// filterByTag keeps artifacts carrying any of the given tags.
+func filterByTag(arts []*store.Artifact, tags []string) []*store.Artifact {
+	var out []*store.Artifact
+	for _, a := range arts {
+		if hasAnyTag(a.Tags, tags) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
 
 var syncCmd = &cobra.Command{
 	Use:   "sync [names...]",
@@ -78,6 +90,9 @@ removed artifacts and 'yori unsync' cleans everything up.`,
 		arts, err := gatherForSync(s, syncGlobal, names)
 		if err != nil {
 			return err
+		}
+		if len(syncTags) > 0 {
+			arts = filterByTag(arts, syncTags)
 		}
 		return deployToAgents(s, arts, agents, base, statePath, syncGlobal, syncLink, syncForce, set)
 	},
@@ -238,6 +253,7 @@ func init() {
 	syncCmd.Flags().BoolVar(&syncForce, "force", false, "overwrite existing files yori didn't create")
 	syncCmd.Flags().BoolVar(&syncSave, "save", false, "record the synced artifacts to .yori/sync.yaml")
 	syncCmd.Flags().StringArrayVar(&syncSet, "set", nil, "set a template variable (key=value), repeatable")
+	syncCmd.Flags().StringArrayVar(&syncTags, "tag", nil, "deploy only artifacts carrying a tag (repeatable)")
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(unsyncCmd)
 }

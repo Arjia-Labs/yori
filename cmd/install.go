@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/arjia-labs/yori/internal/detect"
 	"github.com/arjia-labs/yori/internal/manifest"
 	"github.com/arjia-labs/yori/internal/registry"
 	"github.com/arjia-labs/yori/internal/store"
@@ -14,6 +15,9 @@ var (
 	installName   string
 	installGlobal bool
 	installSync   bool
+	installAuto   bool
+	installAll    bool
+	installTags   []string
 )
 
 var installCmd = &cobra.Command{
@@ -31,8 +35,8 @@ the registry's .yori.json into your store as editable source:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		url, items := resolveRegistry(args[0]), args[1:]
 
-		// Per-item install: vendor items as editable source into the store.
-		if len(items) > 0 {
+		// Per-item install: explicit names, or --auto/--all/--tag selection.
+		if len(items) > 0 || installAuto || installAll || len(installTags) > 0 {
 			s, err := mustStore()
 			if err != nil {
 				return err
@@ -41,9 +45,18 @@ the registry's .yori.json into your store as editable source:
 			if err != nil {
 				return err
 			}
-			installed, err := manifest.InstallItems(url, items, dest)
+			var installed []*manifest.Item
+			if len(items) > 0 {
+				installed, err = manifest.InstallItems(url, items, dest)
+			} else {
+				installed, err = manifest.InstallSelected(url, dest, selectItems)
+			}
 			if err != nil {
 				return err
+			}
+			if len(installed) == 0 {
+				fmt.Fprintln(os.Stderr, "no matching items to install")
+				return nil
 			}
 			fmt.Printf("installed %d item(s) into %s:\n", len(installed), dest)
 			for _, it := range installed {
@@ -67,6 +80,49 @@ the registry's .yori.json into your store as editable source:
 		fmt.Printf("installed %s @ %s\n  from %s\n", p.Name, p.Commit, p.URL)
 		return nil
 	},
+}
+
+// selectItems picks item names from a manifest per --all / --auto / --tag:
+// --all takes everything; --auto keeps items whose `when` matches the detected
+// project stack; --tag keeps items carrying a tag. Partials are pulled via the
+// dependency closure, not selected directly.
+func selectItems(m *manifest.Manifest) ([]string, error) {
+	var stack *detect.Stack
+	if installAuto {
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, err
+		}
+		stack = detect.Scan(wd)
+	}
+	var names []string
+	for i := range m.Items {
+		it := &m.Items[i]
+		if it.Type == "partial" {
+			continue
+		}
+		if !installAll {
+			if installAuto && !it.When.Matches(stack.Deps, stack.FileExists) {
+				continue
+			}
+			if len(installTags) > 0 && !hasAnyTag(it.Tags, installTags) {
+				continue
+			}
+		}
+		names = append(names, it.Name)
+	}
+	return names, nil
+}
+
+func hasAnyTag(tags, want []string) bool {
+	for _, t := range tags {
+		for _, w := range want {
+			if t == w {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // syncInstalled deploys the deployable items (skills/commands/agents) just
@@ -98,5 +154,8 @@ func init() {
 	installCmd.Flags().StringVarP(&installName, "name", "n", "", "package name for whole-repo install (default: derived from URL)")
 	installCmd.Flags().BoolVar(&installGlobal, "global", false, "vendor items into the global store (per-item install)")
 	installCmd.Flags().BoolVarP(&installSync, "sync", "s", false, "deploy the installed items to your agent after vendoring")
+	installCmd.Flags().BoolVar(&installAuto, "auto", false, "install items whose `when` matches the detected project stack")
+	installCmd.Flags().BoolVar(&installAll, "all", false, "install every item in the registry")
+	installCmd.Flags().StringArrayVar(&installTags, "tag", nil, "install items carrying a tag (repeatable)")
 	rootCmd.AddCommand(installCmd)
 }

@@ -221,6 +221,27 @@ yori install acme pr-summary --sync     # vendor the item + its deps, then deplo
 
 Unlike a whole-package install (a read-only layer), **per-item install** copies the item, the base it extends, and the partials it includes into your store as source you own. The manifest is auto-generated from the composition graph and agent-readable — an agent can read it to know exactly what a registry offers and how to compose it. Bare URLs work for public *and* private repos (https with an ssh fallback).
 
+### Install what your project needs
+
+An item can declare a `when:` condition; `yori install --auto` reads your project's dependency manifests (`package.json`, `go.mod`, `pyproject.toml`, `Cargo.toml`, …) and installs only what applies. shadcn installs what you ask; **yori installs what your stack implies.**
+
+```markdown
+---
+name: nextjs-helper
+when: { deps: [next] }      # only relevant when `next` is a dependency
+tags: [frontend]
+---
+```
+
+```bash
+yori detect                          # see the stack yori detects
+yori install acme --auto             # everything applicable to this project
+yori install acme --tag frontend     # everything tagged frontend
+yori install acme --auto --tag frontend   # both: frontend items that fit the stack
+```
+
+So a single registry serves a Next.js app and a NestJS service differently — each gets the items its dependencies call for. `yori sync --tag <t>` likewise deploys only the artifacts you've tagged.
+
 ## 🔌 Use it with your agent (`yori sync`)
 
 A skill or command only helps if your coding agent can *find* it. `yori sync` materializes your skills and commands into the directories agents discover them from — rendering templates (vars, includes, slots) on the way, so you compose once and deploy everywhere.
@@ -305,7 +326,8 @@ The provider comes from `--provider` or the artifact's `model:` hint. yori *mana
 | `yori deps <name>` | what an artifact composes from (extends + transitive includes) |
 | `yori affected <name>` | which artifacts include/extend a partial or base (blast radius) |
 | `yori rm <name>` | delete an artifact |
-| `yori install <reg> [items]` | install a package, or vendor items + their deps (`--sync`, `--global`, `--name`) |
+| `yori install <reg> [items]` | install a package, or vendor items (`--auto`, `--tag`, `--all`, `--sync`, `--global`) |
+| `yori detect` | print the project stack `--auto` matches `when:` conditions against |
 | `yori publish` | build the manifest + commit + push the global store (`--remote`, `-m`) |
 | `yori registry build` | generate a `.yori.json` manifest from the store (`--out`, `--global`) |
 | `yori registry add/ls/rm` | manage registry aliases (use a short name with `install`/`view`) |

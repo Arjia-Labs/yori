@@ -105,6 +105,49 @@ func TestSafeJoinRejectsTraversal(t *testing.T) {
 	}
 }
 
+func TestWhenMatches(t *testing.T) {
+	deps := map[string]bool{"next": true, "react": true}
+	noFile := func(string) bool { return false }
+	yesFile := func(string) bool { return true }
+
+	cases := []struct {
+		w    *When
+		file func(string) bool
+		want bool
+	}{
+		{nil, noFile, true},                                                              // no condition → always
+		{&When{Deps: []string{"next"}}, noFile, true},                                    // dep present
+		{&When{Deps: []string{"@nestjs/core"}}, noFile, false},                           // dep absent
+		{&When{Files: []string{"x"}}, yesFile, true},                                     // file present
+		{&When{Deps: []string{"nope"}, Files: []string{"x"}}, yesFile, true},             // OR: file matches
+		{&When{Deps: []string{"nope"}, Files: []string{"x"}, All: true}, yesFile, false}, // AND: dep fails
+		{&When{Deps: []string{"next"}, Files: []string{"x"}, All: true}, yesFile, true},  // AND: both match
+	}
+	for i, c := range cases {
+		if got := c.w.Matches(deps, c.file); got != c.want {
+			t.Errorf("case %d: got %v want %v", i, got, c.want)
+		}
+	}
+}
+
+func TestBuildParsesWhenFromFrontmatter(t *testing.T) {
+	s, dir := writeStore(t, map[string]string{
+		"nextjs-helper.md": "---\nname: nextjs-helper\nwhen:\n  deps: [next]\n---\nx",
+	})
+	arts, err := s.List("", true, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := Build(dir, arts, Meta{Name: "acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	it := m.Find("nextjs-helper")
+	if it == nil || it.When == nil || len(it.When.Deps) != 1 || it.When.Deps[0] != "next" {
+		t.Errorf("when not parsed: %+v", it)
+	}
+}
+
 func contains(xs []string, x string) bool {
 	for _, v := range xs {
 		if v == x {

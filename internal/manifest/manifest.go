@@ -31,15 +31,82 @@ type Manifest struct {
 
 // Item is one installable unit.
 type Item struct {
-	Name         string   `json:"name"`
-	Type         string   `json:"type"` // prompt|agent|command|skill|partial
-	Description  string   `json:"description,omitempty"`
-	Tags         []string `json:"tags,omitempty"`
-	Files        []string `json:"files"`                  // paths relative to the store root
-	Dependencies []string `json:"dependencies,omitempty"` // in-registry item names
-	// Reserved for later phases (declared now so the schema is stable):
+	Name                 string   `json:"name"`
+	Type                 string   `json:"type"` // prompt|agent|command|skill|partial
+	Description          string   `json:"description,omitempty"`
+	Tags                 []string `json:"tags,omitempty"`
+	Files                []string `json:"files"`                          // paths relative to the store root
+	Dependencies         []string `json:"dependencies,omitempty"`         // in-registry item names
 	RegistryDependencies []string `json:"registryDependencies,omitempty"` // cross-registry (Phase 2)
-	When                 any      `json:"when,omitempty"`                 // context-aware install (clu-8ed346)
+	When                 *When    `json:"when,omitempty"`                 // context-aware install
+}
+
+// When gates an item on the target project's stack: it applies when any listed
+// dep is present (or any file glob matches); All requires every stated matcher.
+type When struct {
+	Deps  []string `json:"deps,omitempty"`
+	Files []string `json:"files,omitempty"`
+	All   bool     `json:"all,omitempty"`
+}
+
+// Matches reports whether the condition holds for a project's deps and files.
+// A nil or empty condition always matches.
+func (w *When) Matches(deps map[string]bool, fileExists func(string) bool) bool {
+	if w == nil {
+		return true
+	}
+	var results []bool
+	if len(w.Deps) > 0 {
+		ok := false
+		for _, d := range w.Deps {
+			if deps[d] {
+				ok = true
+				break
+			}
+		}
+		results = append(results, ok)
+	}
+	if len(w.Files) > 0 {
+		ok := false
+		for _, f := range w.Files {
+			if fileExists(f) {
+				ok = true
+				break
+			}
+		}
+		results = append(results, ok)
+	}
+	if len(results) == 0 {
+		return true // no constraints
+	}
+	if w.All {
+		for _, r := range results {
+			if !r {
+				return false
+			}
+		}
+		return true
+	}
+	for _, r := range results {
+		if r {
+			return true
+		}
+	}
+	return false
+}
+
+// toWhen converts an author-declared frontmatter `when:` (a decoded map) into a
+// typed condition via a JSON round-trip.
+func toWhen(v any) *When {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	var w When
+	if json.Unmarshal(data, &w) != nil {
+		return nil
+	}
+	return &w
 }
 
 // Meta is the registry-level metadata for Build.
@@ -75,7 +142,7 @@ func Build(storeDir string, arts []*store.Artifact, meta Meta) (*Manifest, error
 			Dependencies: append(append([]string{}, bases...), partials...),
 		}
 		if w, ok := a.Extra["when"]; ok {
-			it.When = w // pass through an author-declared `when:` (eval is a later phase)
+			it.When = toWhen(w) // author-declared `when:` from frontmatter
 		}
 		m.Items = append(m.Items, it)
 	}
