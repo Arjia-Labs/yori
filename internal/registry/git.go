@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 )
 
@@ -41,10 +42,53 @@ func NormalizeURL(url string) string {
 	return url
 }
 
-// Clone shallow-clones url into dir.
+// hostRepoRe extracts host/owner/repo from an https or bare URL (host has a dot
+// to distinguish it from a local path).
+var hostRepoRe = regexp.MustCompile(`^(?:https?://)?([a-z0-9.-]+\.[a-z]{2,})/([^/]+)/([^/]+?)(?:\.git)?/?$`)
+
+// cloneCandidates returns the URLs to try when cloning, in order: the
+// normalized (https/local) form, then an ssh form for known hosts. This lets a
+// bare or https URL clone a PRIVATE repo (where https can't auth) by falling
+// back to ssh.
+func cloneCandidates(url string) []string {
+	n := NormalizeURL(url)
+	cands := []string{n}
+	if strings.HasPrefix(n, "https://") {
+		if m := hostRepoRe.FindStringSubmatch(url); m != nil {
+			cands = append(cands, fmt.Sprintf("git@%s:%s/%s.git", m[1], m[2], m[3]))
+		}
+	}
+	return cands
+}
+
+// Clone shallow-clones url into dir, trying https then ssh so bare/https URLs
+// work for public and private repos alike.
 func Clone(url, dir string) error {
-	_, err := git("", "clone", "--depth", "1", NormalizeURL(url), dir)
-	return err
+	var lastErr error
+	for _, u := range cloneCandidates(url) {
+		_ = os.RemoveAll(dir) // clear any partial clone from a prior attempt
+		if err := cloneOne(u, dir); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+	}
+	return lastErr
+}
+
+func cloneOne(url, dir string) error {
+	cmd := exec.Command("git", "clone", "--depth", "1", url, dir)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0") // fail fast instead of prompting
+	var errBuf strings.Builder
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(errBuf.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return fmt.Errorf("git clone %s: %s", url, msg)
+	}
+	return nil
 }
 
 // HeadCommit returns the short HEAD commit of the repo at dir.

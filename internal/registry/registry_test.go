@@ -25,6 +25,24 @@ func TestNormalizeURL(t *testing.T) {
 	}
 }
 
+func TestCloneCandidates(t *testing.T) {
+	// Bare/https GitHub URLs add an ssh fallback (for private repos).
+	got := cloneCandidates("github.com/acme/prompts")
+	if len(got) != 2 || got[0] != "https://github.com/acme/prompts" || got[1] != "git@github.com:acme/prompts.git" {
+		t.Errorf("bare github = %v", got)
+	}
+	got = cloneCandidates("https://github.com/acme/prompts.git")
+	if len(got) != 2 || got[1] != "git@github.com:acme/prompts.git" {
+		t.Errorf("https github = %v", got)
+	}
+	// ssh, file, and local paths have no alternative.
+	for _, in := range []string{"git@github.com:acme/prompts.git", "file:///tmp/reg", "/tmp/local"} {
+		if c := cloneCandidates(in); len(c) != 1 {
+			t.Errorf("cloneCandidates(%q) = %v, want single", in, c)
+		}
+	}
+}
+
 func TestNameFromURL(t *testing.T) {
 	cases := map[string]string{
 		"https://github.com/acme/prompts.git": "prompts",
