@@ -67,6 +67,10 @@ type Artifact struct {
 	Model       string         `yaml:"model,omitempty"`
 	Extends     string         `yaml:"extends,omitempty"`
 	Vars        map[string]Var `yaml:"vars,omitempty"`
+	// Extra captures any other frontmatter keys (e.g. allowed-tools, agent,
+	// argument-hint, tools, context) so they survive a round-trip and pass
+	// through to the agent on deploy.
+	Extra map[string]any `yaml:",inline"`
 
 	Body      string `yaml:"-"` // template body, frontmatter stripped
 	Path      string `yaml:"-"` // resolved file path on disk
@@ -131,28 +135,49 @@ func splitFrontmatter(data []byte) (fm, body []byte, found bool) {
 	return nil, data, false
 }
 
-// Render serializes the artifact back to disk form (frontmatter + body).
+// Render serializes the artifact back to disk form (frontmatter + body). The
+// yaml:"-" fields are skipped and Extra (inline) keys are preserved.
 func (a *Artifact) Render() ([]byte, error) {
-	var buf bytes.Buffer
-	// Marshal a copy with only the frontmatter fields populated.
-	fm := struct {
-		Name        string         `yaml:"name,omitempty"`
-		Description string         `yaml:"description,omitempty"`
-		Tags        []string       `yaml:"tags,omitempty"`
-		Model       string         `yaml:"model,omitempty"`
-		Extends     string         `yaml:"extends,omitempty"`
-		Vars        map[string]Var `yaml:"vars,omitempty"`
-	}{a.Name, a.Description, a.Tags, a.Model, a.Extends, a.Vars}
-
-	out, err := yaml.Marshal(fm)
+	out, err := yaml.Marshal(a)
 	if err != nil {
 		return nil, err
 	}
+	var buf bytes.Buffer
 	buf.WriteString("---\n")
 	buf.Write(out)
 	buf.WriteString("---\n\n")
 	buf.WriteString(a.Body)
 	return buf.Bytes(), nil
+}
+
+// AgentFrontmatter returns the YAML frontmatter to emit when deploying to an
+// agent: the managed fields (description, model, optionally name) plus any
+// passthrough Extra keys, but never yori-internal composition (tags, extends,
+// vars). Returns nil when there's nothing to emit.
+func (a *Artifact) AgentFrontmatter(includeName bool) ([]byte, error) {
+	head := struct {
+		Name        string `yaml:"name,omitempty"`
+		Description string `yaml:"description,omitempty"`
+		Model       string `yaml:"model,omitempty"`
+	}{Description: a.Description, Model: a.Model}
+	if includeName {
+		head.Name = a.Name
+	}
+	out, err := yaml.Marshal(head)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(string(out)) == "{}" {
+		out = nil // all fields empty
+	}
+	if len(a.Extra) > 0 {
+		ex, err := yaml.Marshal(a.Extra)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ex...)
+	}
+	return out, nil
 }
 
 // Scaffold returns starter content for `yori add`, tailored to the type.

@@ -14,7 +14,6 @@ import (
 
 	"github.com/arjia-labs/yori/internal/render"
 	"github.com/arjia-labs/yori/internal/store"
-	"gopkg.in/yaml.v3"
 )
 
 // Target describes where one artifact type lands for an agent, relative to a
@@ -207,12 +206,18 @@ func place(rs render.Resolver, a *store.Artifact, target string, agent Agent, op
 	if err != nil {
 		return err
 	}
-	// A subagent file carries its own frontmatter (name/description/model).
-	if a.Type == store.TypeAgent {
-		body, err = subagentFile(a, body)
-		if err != nil {
-			return err
-		}
+	// Preserve frontmatter on deploy. Skills require name+description; subagents
+	// carry name/description/model; commands take their (optional) frontmatter
+	// without a name (the filename is the command name). Author passthrough keys
+	// (allowed-tools, agent, argument-hint, tools, …) ride along in all cases.
+	switch a.Type {
+	case store.TypeSkill, store.TypeAgent:
+		body, err = withFrontmatter(a, body, true)
+	case store.TypeCommand:
+		body, err = withFrontmatter(a, body, false)
+	}
+	if err != nil {
+		return err
 	}
 
 	if t.Bundle {
@@ -233,19 +238,17 @@ func place(rs render.Resolver, a *store.Artifact, target string, agent Agent, op
 	return os.WriteFile(target, []byte(body), 0o644)
 }
 
-// subagentFile prepends Claude subagent frontmatter (name, description, model)
-// to a rendered agent body.
-func subagentFile(a *store.Artifact, body string) (string, error) {
-	fm := struct {
-		Name        string `yaml:"name"`
-		Description string `yaml:"description,omitempty"`
-		Model       string `yaml:"model,omitempty"`
-	}{a.Name, a.Description, a.Model}
-	out, err := yaml.Marshal(fm)
+// withFrontmatter prepends the artifact's agent frontmatter to a rendered body,
+// returning the body unchanged when there's no frontmatter to emit.
+func withFrontmatter(a *store.Artifact, body string, includeName bool) (string, error) {
+	fm, err := a.AgentFrontmatter(includeName)
 	if err != nil {
 		return "", err
 	}
-	return "---\n" + string(out) + "---\n\n" + body, nil
+	if len(fm) == 0 {
+		return body, nil
+	}
+	return "---\n" + string(fm) + "---\n\n" + body, nil
 }
 
 // link symlinks a static (non-templated) artifact to target.

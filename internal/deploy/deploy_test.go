@@ -60,10 +60,13 @@ func TestSyncRenderCopyPrune(t *testing.T) {
 		t.Errorf("written = %v", res.Written)
 	}
 
-	// Skill rendered with the override, supporting file copied.
+	// Skill rendered with the override, keeps its required frontmatter, support file copied.
 	skillMd := read(t, filepath.Join(base, ".claude/skills/researcher/SKILL.md"))
-	if strings.TrimSpace(skillMd) != "Do deep research." {
-		t.Errorf("skill body = %q", skillMd)
+	if !strings.Contains(skillMd, "name: researcher") {
+		t.Errorf("skill missing required frontmatter:\n%s", skillMd)
+	}
+	if !strings.Contains(skillMd, "Do deep research.") {
+		t.Errorf("skill body not rendered:\n%s", skillMd)
 	}
 	if !exists(filepath.Join(base, ".claude/skills/researcher/helper.py")) {
 		t.Errorf("supporting file not copied")
@@ -200,6 +203,37 @@ func TestCodexSkillPlacement(t *testing.T) {
 	}
 	if !exists(filepath.Join(base, ".agents/skills/researcher/SKILL.md")) {
 		t.Errorf("codex skill not at .agents/skills")
+	}
+}
+
+func TestFrontmatterAndDynamicSyntaxSurviveDeploy(t *testing.T) {
+	base := t.TempDir()
+	cmd := &store.Artifact{
+		Name: "pr-summary", Type: store.TypeCommand, Path: "/x/pr-summary.md",
+		Description: "Summarize a PR",
+		Extra:       map[string]any{"allowed-tools": "Bash(gh *)", "agent": "Explore"},
+		Body:        "Diff:\n!`gh pr diff`\n\nSummarize: {{ input }}",
+	}
+	if _, err := Sync(noResolver{}, []*store.Artifact{cmd}, claudeOpts(base, filepath.Join(t.TempDir(), "s.json"))); err != nil {
+		t.Fatal(err)
+	}
+	out := read(t, filepath.Join(base, ".claude/commands/pr-summary.md"))
+	// Author frontmatter passes through to the agent...
+	for _, want := range []string{"allowed-tools", "Bash(gh *)", "agent: Explore", "description: Summarize a PR"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing frontmatter %q:\n%s", want, out)
+		}
+	}
+	// ...and the agent's runtime syntax is untouched: !`cmd` stays, {{ input }} -> $ARGUMENTS.
+	if !strings.Contains(out, "!`gh pr diff`") {
+		t.Errorf("dynamic bash mangled:\n%s", out)
+	}
+	if !strings.Contains(out, "Summarize: $ARGUMENTS") {
+		t.Errorf("argument placeholder missing:\n%s", out)
+	}
+	// A command without name in frontmatter (filename is the name).
+	if strings.Contains(out, "name: pr-summary") {
+		t.Errorf("command frontmatter should not include name:\n%s", out)
 	}
 }
 

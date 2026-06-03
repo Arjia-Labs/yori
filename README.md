@@ -229,6 +229,19 @@ Supported agents and where each type lands (project scope shown; `--global` uses
 
 Skills carry their bundle support files; a command's `{{ input }}` becomes the agent's argument token (`$ARGUMENTS`); a yori `agent` becomes a Claude subagent with `name`/`description`/`model` frontmatter. Combinations an agent doesn't support are skipped with a note, never an error.
 
+**Frontmatter passes through.** Any agent-specific frontmatter you author — `allowed-tools`, `argument-hint`, `agent`, `context`, `tools` — is preserved on deploy, and runtime syntax (`!`cmd``, `$ARGUMENTS`, `@file`) is never touched. So you can compose a dynamic command from shared partials *and* let the agent execute it:
+
+```markdown
+---
+name: pr-summary
+description: Summarize a pull request
+allowed-tools: Bash(gh *)
+---
+{% include 'house-style' %}        {# yori composes the static scaffolding #}
+PR diff: !`gh pr diff`             {# the agent runs this at invocation #}
+Summarize for {{ input }}.         {# → $ARGUMENTS #}
+```
+
 yori records what it wrote, so a re-sync **prunes** artifacts you've removed and refuses to clobber files it didn't create (use `--force` to override). This is the piece a plain installer can't do: the deployed skill is a *rendered, parameterized* copy of your source, not a raw file.
 
 **Make it reproducible.** `yori sync --save` records the chosen artifacts to a committed `.yori/sync.yaml`. Then a teammate clones the repo and runs a bare `yori sync` to hydrate the project's whole agent setup in one command:

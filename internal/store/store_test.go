@@ -132,6 +132,28 @@ func TestTypedStorage(t *testing.T) {
 	}
 }
 
+func TestFrontmatterPassthrough(t *testing.T) {
+	data := "---\nname: pr-summary\ndescription: d\nallowed-tools: Bash(gh *)\nagent: Explore\ncontext: fork\n---\nbody"
+	a, err := parseArtifact([]byte(data), "/x/pr-summary.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Unknown keys land in Extra, not dropped.
+	if a.Extra["allowed-tools"] != "Bash(gh *)" || a.Extra["agent"] != "Explore" || a.Extra["context"] != "fork" {
+		t.Errorf("Extra = %v", a.Extra)
+	}
+	// And they survive a round-trip back to disk.
+	out, err := a.Render()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"name: pr-summary", "allowed-tools", "agent: Explore", "context: fork"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("round-trip dropped %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestSkillBundles(t *testing.T) {
 	dir := t.TempDir()
 	s := &Store{globalStore: filepath.Join(dir, "store")}
