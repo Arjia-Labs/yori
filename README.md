@@ -286,6 +286,8 @@ The provider comes from `--provider` or the artifact's `model:` hint. yori *mana
 | `yori show <name>` | print metadata (type, layer, path, tags, vars) |
 | `yori ls` | list artifacts (all types; `--type`, `--tag`, `--global`) |
 | `yori which <name>` | print the resolved file path |
+| `yori deps <name>` | what an artifact composes from (extends + transitive includes) |
+| `yori affected <name>` | which artifacts include/extend a partial or base (blast radius) |
 | `yori rm <name>` | delete an artifact |
 | `yori install <git-url>` | install a package from git (`--name`) |
 | `yori pkg ls` | list installed packages |
