@@ -9,6 +9,22 @@ import (
 	"github.com/arjia-labs/yori/internal/config"
 )
 
+func TestNormalizeURL(t *testing.T) {
+	cases := map[string]string{
+		"github.com/acme/prompts":         "https://github.com/acme/prompts",
+		"gitlab.com/org/repo":             "https://gitlab.com/org/repo",
+		"https://github.com/acme/prompts": "https://github.com/acme/prompts", // unchanged
+		"git@github.com:acme/prompts.git": "git@github.com:acme/prompts.git", // unchanged
+		"file:///tmp/reg":                 "file:///tmp/reg",                 // unchanged
+		"/tmp/local/path":                 "/tmp/local/path",                 // local path, unchanged
+	}
+	for in, want := range cases {
+		if got := NormalizeURL(in); got != want {
+			t.Errorf("NormalizeURL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestNameFromURL(t *testing.T) {
 	cases := map[string]string{
 		"https://github.com/acme/prompts.git": "prompts",

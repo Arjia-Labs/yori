@@ -27,9 +27,23 @@ func git(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(out.String()), nil
 }
 
+// NormalizeURL turns a bare host/owner/repo reference (e.g.
+// github.com/acme/prompts) into a clonable https URL, leaving full URLs
+// (https://, git@, ssh://, file://) and local paths untouched.
+func NormalizeURL(url string) string {
+	if strings.Contains(url, "://") || strings.HasPrefix(url, "git@") {
+		return url
+	}
+	// host/owner/repo — a host has a dot before the first slash.
+	if i := strings.Index(url, "/"); i > 0 && strings.Contains(url[:i], ".") {
+		return "https://" + strings.TrimSuffix(url, "/")
+	}
+	return url
+}
+
 // Clone shallow-clones url into dir.
 func Clone(url, dir string) error {
-	_, err := git("", "clone", "--depth", "1", url, dir)
+	_, err := git("", "clone", "--depth", "1", NormalizeURL(url), dir)
 	return err
 }
 
