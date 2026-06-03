@@ -53,6 +53,6 @@ var lsCmd = &cobra.Command{
 func init() {
 	lsCmd.Flags().StringVar(&lsTag, "tag", "", "filter by tag")
 	lsCmd.Flags().BoolVar(&lsGlobal, "global", false, "list only the global store")
-	lsCmd.Flags().StringVarP(&lsType, "type", "t", "", "filter by type: prompt|agent|command|skill")
+	lsCmd.Flags().StringVarP(&lsType, "type", "t", "", "filter by type: prompt|agent|command|skill|rule")
 	rootCmd.AddCommand(lsCmd)
 }

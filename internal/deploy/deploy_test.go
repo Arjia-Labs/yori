@@ -237,6 +237,34 @@ func TestFrontmatterAndDynamicSyntaxSurviveDeploy(t *testing.T) {
 	}
 }
 
+func TestRuleDeploy(t *testing.T) {
+	base := t.TempDir()
+	rule := &store.Artifact{
+		Name: "api-design", Type: store.TypeRule, Path: "/x/api-design.md",
+		Description: "API conventions",
+		// `paths` is a Claude rules field (passes through); `when` is yori-internal.
+		Extra: map[string]any{"paths": []any{"src/api/**/*.ts"}, "when": map[string]any{"deps": []any{"react"}}},
+		Body:  "- Validate input.",
+	}
+	if _, err := Sync(noResolver{}, []*store.Artifact{rule}, claudeOpts(base, filepath.Join(t.TempDir(), "s.json"))); err != nil {
+		t.Fatal(err)
+	}
+	out := read(t, filepath.Join(base, ".claude/rules/api-design.md"))
+	if !strings.Contains(out, "paths") || !strings.Contains(out, "src/api/**/*.ts") {
+		t.Errorf("rule paths not preserved:\n%s", out)
+	}
+	if !strings.Contains(out, "- Validate input.") {
+		t.Errorf("rule body missing:\n%s", out)
+	}
+	// yori-internal `when` and `name` must NOT leak into the deployed rule.
+	if strings.Contains(out, "when") {
+		t.Errorf("`when` leaked into deployed rule:\n%s", out)
+	}
+	if strings.Contains(out, "name: api-design") {
+		t.Errorf("rule should not carry a name (filename is identity):\n%s", out)
+	}
+}
+
 func TestUnsync(t *testing.T) {
 	base := t.TempDir()
 	state := filepath.Join(t.TempDir(), "s.json")

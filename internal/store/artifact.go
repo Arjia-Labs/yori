@@ -18,10 +18,11 @@ const (
 	TypeAgent   Type = "agent"
 	TypeCommand Type = "command"
 	TypeSkill   Type = "skill"
+	TypeRule    Type = "rule"
 )
 
 // AllTypes lists every artifact type in display order.
-var AllTypes = []Type{TypePrompt, TypeAgent, TypeCommand, TypeSkill}
+var AllTypes = []Type{TypePrompt, TypeAgent, TypeCommand, TypeSkill, TypeRule}
 
 // subdir returns the store subdirectory for a type ("" for prompts).
 func (t Type) subdir() string {
@@ -32,6 +33,8 @@ func (t Type) subdir() string {
 		return "commands"
 	case TypeSkill:
 		return "skills"
+	case TypeRule:
+		return "rules"
 	default:
 		return ""
 	}
@@ -48,8 +51,10 @@ func ParseType(s string) (Type, error) {
 		return TypeCommand, nil
 	case "skill", "skills":
 		return TypeSkill, nil
+	case "rule", "rules":
+		return TypeRule, nil
 	default:
-		return "", fmt.Errorf("unknown type %q (want prompt|agent|command|skill)", s)
+		return "", fmt.Errorf("unknown type %q (want prompt|agent|command|skill|rule)", s)
 	}
 }
 
@@ -170,8 +175,17 @@ func (a *Artifact) AgentFrontmatter(includeName bool) ([]byte, error) {
 	if strings.TrimSpace(string(out)) == "{}" {
 		out = nil // all fields empty
 	}
-	if len(a.Extra) > 0 {
-		ex, err := yaml.Marshal(a.Extra)
+	// Pass author frontmatter through, minus yori-internal keys (e.g. `when`,
+	// used for registry install selection, not by the agent).
+	extra := map[string]any{}
+	for k, v := range a.Extra {
+		if k == "when" {
+			continue
+		}
+		extra[k] = v
+	}
+	if len(extra) > 0 {
+		ex, err := yaml.Marshal(extra)
 		if err != nil {
 			return nil, err
 		}
@@ -205,6 +219,14 @@ func Scaffold(name string, typ Type) []byte {
 			"---\n\n" +
 			"# " + name + " skill\n\n" +
 			"Describe when to use this skill and the steps it performs.\n")
+	case TypeRule:
+		return []byte(header +
+			"# paths:               # optional: scope this rule to matching files\n" +
+			"#   - \"src/**/*.ts\"\n" +
+			"---\n\n" +
+			"# " + name + "\n\n" +
+			"State the rule as direct, checkable guidance. Compose shared blocks\n" +
+			"with {% include 'partial' %}.\n")
 	default:
 		return []byte(header +
 			"vars:\n" +

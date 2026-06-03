@@ -94,14 +94,14 @@ func TestTypedStorage(t *testing.T) {
 	s := &Store{globalStore: filepath.Join(dir, "store")}
 
 	// Save one of each type to the global store.
-	for _, typ := range []Type{TypePrompt, TypeAgent, TypeCommand, TypeSkill} {
+	for _, typ := range []Type{TypePrompt, TypeAgent, TypeCommand, TypeSkill, TypeRule} {
 		if _, err := s.Save(typ, "thing", Scaffold("thing", typ), true); err != nil {
 			t.Fatalf("save %s: %v", typ, err)
 		}
 	}
 
 	// Each resolves independently and lands in the right subdir.
-	for _, typ := range []Type{TypePrompt, TypeAgent, TypeCommand, TypeSkill} {
+	for _, typ := range []Type{TypePrompt, TypeAgent, TypeCommand, TypeSkill, TypeRule} {
 		a, err := s.Resolve(typ, "thing")
 		if err != nil {
 			t.Fatalf("resolve %s: %v", typ, err)
@@ -115,13 +115,13 @@ func TestTypedStorage(t *testing.T) {
 		}
 	}
 
-	// List all types finds four; filtered finds one.
+	// List all types finds one of each; filtered finds one.
 	all, err := s.List("", true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(all) != 4 {
-		t.Errorf("list all = %d want 4", len(all))
+	if len(all) != len(AllTypes) {
+		t.Errorf("list all = %d want %d", len(all), len(AllTypes))
 	}
 	agents, err := s.List(TypeAgent, true, "")
 	if err != nil {

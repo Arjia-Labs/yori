@@ -184,7 +184,7 @@ func gatherForSync(s *store.Store, global bool, names []string) ([]*store.Artifa
 	matched := map[string]bool{}
 
 	var arts []*store.Artifact
-	for _, typ := range []store.Type{store.TypeSkill, store.TypeCommand, store.TypeAgent} {
+	for _, typ := range []store.Type{store.TypeSkill, store.TypeCommand, store.TypeAgent, store.TypeRule} {
 		list, err := s.List(typ, global, "")
 		if err != nil {
 			return nil, err
@@ -202,7 +202,7 @@ func gatherForSync(s *store.Store, global bool, names []string) ([]*store.Artifa
 	}
 	for n := range want {
 		if !matched[n] {
-			return nil, fmt.Errorf("no skill, command, or agent named %q to sync", n)
+			return nil, fmt.Errorf("no skill, command, agent, or rule named %q to sync", n)
 		}
 	}
 	return arts, nil

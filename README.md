@@ -45,7 +45,7 @@ cat bug.log | yori run triage --tone=blunt | claude
 | | |
 |---|---|
 | 📄 **Plain files** | Every artifact is a markdown file with YAML frontmatter. Greppable, `$EDITOR`-friendly, diffs cleanly, versioned with your own git. |
-| 🧩 **Unified artifacts** | One home for prompts, **agents**, **slash-commands**, and **skills** — same treatment, organized by type. |
+| 🧩 **Unified artifacts** | One home for prompts, **agents**, **slash-commands**, **skills**, and **rules** — same treatment, organized by type. |
 | 🪢 **Composition** | Liquid templating: `{{ variables }}`, `{% include %}` partials, `{% if %}`/`{% for %}`, and **template inheritance** via slots. |
 | 🚰 **Pipe-first** | Reads stdin, writes stdout. `{{ input }}` captures piped text (or it's appended). Drops into any Unix pipeline. |
 | 🗂️ **Layered store** | A project `./.yori` shadows your global `~/.yori`, which is backed by installed packages — like a search path for prompts. |
@@ -115,6 +115,7 @@ An **artifact** is one markdown file: YAML frontmatter (`name`, `description`, `
 | `agent` | `store/agents/` | a system prompt + role definition |
 | `command` | `store/commands/` | a slash-command body |
 | `skill` | `store/skills/` | a skill description |
+| `rule` | `store/rules/` | always-on / path-scoped instructions |
 
 Every command takes `--type`/`-t` (default `prompt`). `yori ls` shows all types by default with a `TYPE` column; `yori ls --type agent` filters.
 
@@ -258,13 +259,13 @@ yori unsync -a '*'                 # remove everything sync placed
 
 Supported agents and where each type lands (project scope shown; `--global` uses the personal dir):
 
-| | skill | command | agent / subagent |
-|---|---|---|---|
-| **claude-code** | `.claude/skills/<n>/SKILL.md` | `.claude/commands/<n>.md` | `.claude/agents/<n>.md` |
-| **codex** | `.agents/skills/<n>/SKILL.md` | `~/.codex/prompts/<n>.md` *(global only)* | — |
-| **cursor** | — | `.cursor/commands/<n>.md` | — |
+| | skill | command | agent / subagent | rule |
+|---|---|---|---|---|
+| **claude-code** | `.claude/skills/<n>/SKILL.md` | `.claude/commands/<n>.md` | `.claude/agents/<n>.md` | `.claude/rules/<n>.md` |
+| **codex** | `.agents/skills/<n>/SKILL.md` | `~/.codex/prompts/<n>.md` *(global only)* | — | — |
+| **cursor** | — | `.cursor/commands/<n>.md` | — | — |
 
-Skills carry their bundle support files; a command's `{{ input }}` becomes the agent's argument token (`$ARGUMENTS`); a yori `agent` becomes a Claude subagent with `name`/`description`/`model` frontmatter. Combinations an agent doesn't support are skipped with a note, never an error.
+Skills carry their bundle support files; a command's `{{ input }}` becomes the agent's argument token (`$ARGUMENTS`); a yori `agent` becomes a Claude subagent with `name`/`description`/`model` frontmatter; a **rule** keeps its `paths:` frontmatter (so Claude path-scopes it) and can be composed from shared partials. Combinations an agent doesn't support are skipped with a note, never an error.
 
 **Frontmatter passes through.** Any agent-specific frontmatter you author — `allowed-tools`, `argument-hint`, `agent`, `context`, `tools` — is preserved on deploy, and runtime syntax (`!`cmd``, `$ARGUMENTS`, `@file`) is never touched. So you can compose a dynamic command from shared partials *and* let the agent execute it:
 

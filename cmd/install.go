@@ -131,7 +131,7 @@ func syncInstalled(s *store.Store, installed []*manifest.Item) error {
 	var names []string
 	for _, it := range installed {
 		switch it.Type {
-		case "skill", "command", "agent":
+		case "skill", "command", "agent", "rule":
 			names = append(names, it.Name)
 		}
 	}

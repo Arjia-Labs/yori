@@ -45,6 +45,7 @@ var Agents = map[string]Agent{
 		store.TypeSkill:   {ProjectDir: ".claude/skills", GlobalDir: ".claude/skills", Bundle: true},
 		store.TypeCommand: {ProjectDir: ".claude/commands", GlobalDir: ".claude/commands", ArgToken: "$ARGUMENTS"},
 		store.TypeAgent:   {ProjectDir: ".claude/agents", GlobalDir: ".claude/agents"},
+		store.TypeRule:    {ProjectDir: ".claude/rules", GlobalDir: ".claude/rules"},
 	}},
 	// Codex: skills live in .agents/skills at both scopes; custom prompts are
 	// global-only (~/.codex/prompts); no per-agent file (AGENTS.md is aggregate).
@@ -213,7 +214,8 @@ func place(rs render.Resolver, a *store.Artifact, target string, agent Agent, op
 	switch a.Type {
 	case store.TypeSkill, store.TypeAgent:
 		body, err = withFrontmatter(a, body, true)
-	case store.TypeCommand:
+	case store.TypeCommand, store.TypeRule:
+		// Filename is the identity; pass through `paths:`/`description` frontmatter.
 		body, err = withFrontmatter(a, body, false)
 	}
 	if err != nil {

@@ -14,7 +14,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:           "yori",
 	Short:         "Yori — the home for everything you tell your AI",
-	Long:          "Yori is a local library of reusable AI building blocks — prompts, agents,\nslash-commands, and skills. Store, compose, and render them into ready-to-pipe text.",
+	Long:          "Yori is a local library of reusable AI building blocks — prompts, agents,\nslash-commands, skills, and rules. Store, compose, and render them into ready-to-pipe text.",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
@@ -34,7 +34,7 @@ func mustStore() (*store.Store, error) {
 
 // addTypeFlag registers the shared --type/-t flag on a command.
 func addTypeFlag(cmd *cobra.Command, v *string) {
-	cmd.Flags().StringVarP(v, "type", "t", "prompt", "artifact type: prompt|agent|command|skill")
+	cmd.Flags().StringVarP(v, "type", "t", "prompt", "artifact type: prompt|agent|command|skill|rule")
 }
 
 // resolveArtifact loads an artifact, honoring --global by restricting the

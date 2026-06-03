@@ -216,7 +216,7 @@ func init() {
 	// flags, but we still register the reserved flags so they show up in
 	// `yori run --help` and shell completion. Their values are read by
 	// parseRunArgs, not by cobra.
-	runCmd.Flags().StringP("type", "t", "prompt", "artifact type: prompt|agent|command|skill")
+	runCmd.Flags().StringP("type", "t", "prompt", "artifact type: prompt|agent|command|skill|rule")
 	runCmd.Flags().Bool("global", false, "render the global artifact only")
 	runCmd.Flags().String("file", "", "read {{ input }} from a file")
 	runCmd.Flags().StringArray("set", nil, "set a variable (key=value), repeatable")
