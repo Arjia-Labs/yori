@@ -27,44 +27,48 @@ published set with: yori install <url>.`,
 		if err != nil {
 			return err
 		}
-
-		if !registry.IsRepo(storeDir) {
-			if pushRemote == "" {
-				return fmt.Errorf("global store is not a git repo; pass --remote <url> to initialize")
-			}
-			if err := registry.InitRepo(storeDir); err != nil {
-				return err
-			}
-			if err := registry.SetRemote(storeDir, pushRemote); err != nil {
-				return err
-			}
-		} else if pushRemote != "" {
-			if err := registry.SetRemote(storeDir, pushRemote); err != nil {
-				return err
-			}
-		}
-
-		msg := pushMsg
-		if msg == "" {
-			msg = "Update prompts"
-		}
-		committed, err := registry.CommitAll(storeDir, msg)
-		if err != nil {
-			return err
-		}
-		if !registry.HasCommits(storeDir) {
-			return fmt.Errorf("nothing to publish (global store is empty)")
-		}
-		if err := registry.Push(storeDir); err != nil {
-			return err
-		}
-		if committed {
-			fmt.Printf("published %s\n", storeDir)
-		} else {
-			fmt.Println("already up to date; pushed")
-		}
-		return nil
+		return pushStoreDir(storeDir, pushRemote, pushMsg)
 	},
+}
+
+// pushStoreDir commits and pushes a store directory as a git repo, initializing
+// it (and origin) on first push. Shared by `yori push` and `yori publish`.
+func pushStoreDir(storeDir, remote, msg string) error {
+	if !registry.IsRepo(storeDir) {
+		if remote == "" {
+			return fmt.Errorf("store is not a git repo; pass --remote <url> to initialize")
+		}
+		if err := registry.InitRepo(storeDir); err != nil {
+			return err
+		}
+		if err := registry.SetRemote(storeDir, remote); err != nil {
+			return err
+		}
+	} else if remote != "" {
+		if err := registry.SetRemote(storeDir, remote); err != nil {
+			return err
+		}
+	}
+
+	if msg == "" {
+		msg = "Update prompts"
+	}
+	committed, err := registry.CommitAll(storeDir, msg)
+	if err != nil {
+		return err
+	}
+	if !registry.HasCommits(storeDir) {
+		return fmt.Errorf("nothing to publish (store is empty)")
+	}
+	if err := registry.Push(storeDir); err != nil {
+		return err
+	}
+	if committed {
+		fmt.Printf("published %s\n", storeDir)
+	} else {
+		fmt.Println("already up to date; pushed")
+	}
+	return nil
 }
 
 func init() {
