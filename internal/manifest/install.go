@@ -9,8 +9,8 @@ import (
 
 // InstallItems clones a registry, resolves the dependency closure of the named
 // items, and copies their files into destStore as editable source. Returns the
-// installed item names.
-func InstallItems(url string, names []string, destStore string) ([]string, error) {
+// installed items (closure), so callers can tell which are deployable.
+func InstallItems(url string, names []string, destStore string) ([]*Item, error) {
 	repo, cleanup, err := CloneTemp(url)
 	if err != nil {
 		return nil, err
@@ -30,7 +30,6 @@ func InstallItems(url string, names []string, destStore string) ([]string, error
 		return nil, err
 	}
 
-	var installed []string
 	for _, it := range items {
 		for _, f := range it.Files {
 			src, err := safeJoin(repo, f)
@@ -45,9 +44,8 @@ func InstallItems(url string, names []string, destStore string) ([]string, error
 				return nil, fmt.Errorf("install %s: %w", it.Name, err)
 			}
 		}
-		installed = append(installed, it.Name)
 	}
-	return installed, nil
+	return items, nil
 }
 
 func copyFile(src, dst string) error {

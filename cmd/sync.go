@@ -79,36 +79,42 @@ removed artifacts and 'yori unsync' cleans everything up.`,
 		if err != nil {
 			return err
 		}
-		scope := "project"
-		if syncGlobal {
-			scope = "global"
-		}
-		for _, agent := range deploy.ExpandAgents(agents) {
-			res, err := deploy.Sync(s, arts, deploy.Options{
-				Agent:   agent,
-				BaseDir: base,
-				Global:  syncGlobal,
-				State:   statePath,
-				Link:    syncLink,
-				Force:   syncForce,
-				Set:     set,
-			})
-			if err != nil {
-				return err
-			}
-			fmt.Printf("synced %d artifact(s) to %s (%s)\n", len(res.Written), agent, scope)
-			for _, w := range res.Written {
-				fmt.Printf("  + %s\n", w)
-			}
-			for _, p := range res.Pruned {
-				fmt.Printf("  - pruned %s\n", p)
-			}
-			for _, sk := range res.Skipped {
-				fmt.Printf("  · skipped %s (unsupported by %s at %s scope)\n", sk, agent, scope)
-			}
-		}
-		return nil
+		return deployToAgents(s, arts, agents, base, statePath, syncGlobal, syncLink, syncForce, set)
 	},
+}
+
+// deployToAgents renders and deploys arts to each agent, printing a summary.
+// Shared by `yori sync` and `yori install --sync`.
+func deployToAgents(s *store.Store, arts []*store.Artifact, agents []string, base, statePath string, global, link, force bool, set map[string]string) error {
+	scope := "project"
+	if global {
+		scope = "global"
+	}
+	for _, agent := range deploy.ExpandAgents(agents) {
+		res, err := deploy.Sync(s, arts, deploy.Options{
+			Agent:   agent,
+			BaseDir: base,
+			Global:  global,
+			State:   statePath,
+			Link:    link,
+			Force:   force,
+			Set:     set,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("synced %d artifact(s) to %s (%s)\n", len(res.Written), agent, scope)
+		for _, w := range res.Written {
+			fmt.Printf("  + %s\n", w)
+		}
+		for _, p := range res.Pruned {
+			fmt.Printf("  - pruned %s\n", p)
+		}
+		for _, sk := range res.Skipped {
+			fmt.Printf("  · skipped %s (unsupported by %s at %s scope)\n", sk, agent, scope)
+		}
+	}
+	return nil
 }
 
 // allArtifactNames returns the unique skill/command names in scope (for

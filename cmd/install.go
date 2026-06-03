@@ -2,15 +2,18 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/arjia-labs/yori/internal/manifest"
 	"github.com/arjia-labs/yori/internal/registry"
+	"github.com/arjia-labs/yori/internal/store"
 	"github.com/spf13/cobra"
 )
 
 var (
 	installName   string
 	installGlobal bool
+	installSync   bool
 )
 
 var installCmd = &cobra.Command{
@@ -43,8 +46,11 @@ the registry's .yori.json into your store as editable source:
 				return err
 			}
 			fmt.Printf("installed %d item(s) into %s:\n", len(installed), dest)
-			for _, n := range installed {
-				fmt.Printf("  + %s\n", n)
+			for _, it := range installed {
+				fmt.Printf("  + %s\n", it.Name)
+			}
+			if installSync {
+				return syncInstalled(s, installed)
 			}
 			return nil
 		}
@@ -63,8 +69,34 @@ the registry's .yori.json into your store as editable source:
 	},
 }
 
+// syncInstalled deploys the deployable items (skills/commands/agents) just
+// vendored, to the default agent.
+func syncInstalled(s *store.Store, installed []*manifest.Item) error {
+	var names []string
+	for _, it := range installed {
+		switch it.Type {
+		case "skill", "command", "agent":
+			names = append(names, it.Name)
+		}
+	}
+	if len(names) == 0 {
+		fmt.Fprintln(os.Stderr, "yori: installed items are prompts/partials; nothing to deploy")
+		return nil
+	}
+	arts, err := gatherForSync(s, installGlobal, names)
+	if err != nil {
+		return err
+	}
+	base, statePath, err := syncScope(installGlobal)
+	if err != nil {
+		return err
+	}
+	return deployToAgents(s, arts, []string{"claude-code"}, base, statePath, installGlobal, false, false, nil)
+}
+
 func init() {
 	installCmd.Flags().StringVarP(&installName, "name", "n", "", "package name for whole-repo install (default: derived from URL)")
 	installCmd.Flags().BoolVar(&installGlobal, "global", false, "vendor items into the global store (per-item install)")
+	installCmd.Flags().BoolVarP(&installSync, "sync", "s", false, "deploy the installed items to your agent after vendoring")
 	rootCmd.AddCommand(installCmd)
 }
