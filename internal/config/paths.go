@@ -50,6 +50,15 @@ func RegistryFile() (string, error) {
 	return filepath.Join(root, "registry.yaml"), nil
 }
 
+// RegistriesFile returns ~/.yori/registries.yaml, the registry-alias map.
+func RegistriesFile() (string, error) {
+	root, err := GlobalRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, "registries.yaml"), nil
+}
+
 // FindProjectRoot walks up from start looking for a ".yori" directory and
 // returns the path to that directory (e.g. /repo/.yori). It returns "" when
 // none is found.

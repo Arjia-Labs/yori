@@ -29,7 +29,7 @@ the registry's .yori.json into your store as editable source:
   yori install github.com/acme/prompts security-review commit-message`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		url, items := args[0], args[1:]
+		url, items := resolveRegistry(args[0]), args[1:]
 
 		// Per-item install: vendor items as editable source into the store.
 		if len(items) > 0 {

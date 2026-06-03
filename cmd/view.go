@@ -19,7 +19,7 @@ var viewCmd = &cobra.Command{
 and list its items, or show one item's detail.`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		data, err := manifest.FetchRemote(args[0])
+		data, err := manifest.FetchRemote(resolveRegistry(args[0]))
 		if err != nil {
 			return err
 		}
