@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  <a href="https://arjia-labs.github.io/yori/"><img src="https://img.shields.io/badge/docs-arjia--labs.github.io%2Fyori-FF8A00?style=for-the-badge&labelColor=0B0F14&logo=readthedocs&logoColor=white" alt="Documentation"></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/arjia-labs/yori/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/arjia-labs/yori/ci.yml?branch=main&style=flat-square&logo=github&label=build" alt="Build status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT licensed"></a>
   <img src="https://img.shields.io/badge/go-1.26%2B-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26+">
