@@ -210,12 +210,16 @@ Installed packages are read-only layers, so `yori run review` falls through to a
 `yori registry build` generates a `.yori.json` manifest — yori **infers** each item's files and dependencies from the composition graph (no hand-authoring). Then anyone can discover and install *individual* items, with their dependency closure, as editable source:
 
 ```bash
-yori registry build                                   # publisher: generate .yori.json
-yori view github.com/acme/prompts                     # browse items — no clone (GitHub raw)
-yori install github.com/acme/prompts security-review  # vendor one item + its deps
+# Publish (one command: build .yori.json + commit + push the global store)
+yori publish --remote github.com/me/prompts
+
+# Consume — alias once, then a single fetch + vendor + deploy
+yori registry add acme github.com/me/prompts
+yori view acme                          # browse items (no clone for public GitHub)
+yori install acme pr-summary --sync     # vendor the item + its deps, then deploy to your agent
 ```
 
-Unlike a whole-package install (a read-only layer), **per-item install** copies the item, the base it extends, and the partials it includes into your store as source you own. The manifest is auto-generated and agent-readable — an agent can read it to know exactly what a registry offers and how to compose it.
+Unlike a whole-package install (a read-only layer), **per-item install** copies the item, the base it extends, and the partials it includes into your store as source you own. The manifest is auto-generated from the composition graph and agent-readable — an agent can read it to know exactly what a registry offers and how to compose it. Bare URLs work for public *and* private repos (https with an ssh fallback).
 
 ## 🔌 Use it with your agent (`yori sync`)
 
@@ -301,9 +305,11 @@ The provider comes from `--provider` or the artifact's `model:` hint. yori *mana
 | `yori deps <name>` | what an artifact composes from (extends + transitive includes) |
 | `yori affected <name>` | which artifacts include/extend a partial or base (blast radius) |
 | `yori rm <name>` | delete an artifact |
-| `yori install <url> [items]` | install a package, or vendor individual items + their deps (`--name`, `--global`) |
+| `yori install <reg> [items]` | install a package, or vendor items + their deps (`--sync`, `--global`, `--name`) |
+| `yori publish` | build the manifest + commit + push the global store (`--remote`, `-m`) |
 | `yori registry build` | generate a `.yori.json` manifest from the store (`--out`, `--global`) |
-| `yori view <url> [item]` | browse a registry's items from its manifest, no clone (`--all`) |
+| `yori registry add/ls/rm` | manage registry aliases (use a short name with `install`/`view`) |
+| `yori view <reg> [item]` | browse a registry's items from its manifest, no clone (`--all`) |
 | `yori pkg ls` | list installed packages |
 | `yori update [name]` | pull + re-pin installed packages |
 | `yori uninstall <name>` | remove an installed package |
