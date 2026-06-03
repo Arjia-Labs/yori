@@ -1,0 +1,70 @@
+---
+title: Deploy to agents
+description: yori sync renders skills, commands, subagents, and rules into the dirs Claude Code, Codex, and Cursor read from.
+---
+
+A skill or command only helps if your coding agent can *find* it. `yori sync`
+materializes your skills and commands into the directories agents discover them
+from — rendering templates (vars, includes, slots) on the way, so you compose
+once and deploy everywhere.
+
+```bash
+yori sync                          # render into ./.claude (Claude Code, default)
+yori sync -a codex -a cursor       # target specific agents (repeatable)
+yori sync -a '*'                   # every supported agent
+yori sync --global                 # into the agent's global dir (personal)
+yori sync --set tone=blunt         # override template variables at deploy time
+yori sync --link                   # symlink static artifacts (live editing)
+yori unsync -a '*'                 # remove everything sync placed
+```
+
+## Where each type lands
+
+Project scope shown; `--global` uses the personal dir.
+
+| | skill | command | agent / subagent | rule |
+|---|---|---|---|---|
+| **claude-code** | `.claude/skills/<n>/SKILL.md` | `.claude/commands/<n>.md` | `.claude/agents/<n>.md` | `.claude/rules/<n>.md` |
+| **codex** | `.agents/skills/<n>/SKILL.md` | `~/.codex/prompts/<n>.md` *(global only)* | — | — |
+| **cursor** | — | `.cursor/commands/<n>.md` | — | — |
+
+Skills carry their bundle support files; a command's `{{ input }}` becomes the
+agent's argument token (`$ARGUMENTS`); a yori `agent` becomes a Claude subagent
+with `name`/`description`/`model` frontmatter; a **rule** keeps its `paths:`
+frontmatter (so Claude path-scopes it). Combinations an agent doesn't support
+are skipped with a note, never an error.
+
+## Frontmatter passes through
+
+Any agent-specific frontmatter you author — `allowed-tools`, `argument-hint`,
+`agent`, `context`, `tools` — is preserved on deploy, and runtime syntax
+(`` !`cmd` ``, `$ARGUMENTS`, `@file`) is never touched. So you can compose a
+dynamic command from shared partials *and* let the agent execute it:
+
+```markdown
+---
+name: pr-summary
+description: Summarize a pull request
+allowed-tools: Bash(gh *)
+---
+{% include 'house-style' %}        {# yori composes the static scaffolding #}
+PR diff: !`gh pr diff`             {# the agent runs this at invocation #}
+Summarize for {{ input }}.         {# → $ARGUMENTS #}
+```
+
+yori records what it wrote, so a re-sync **prunes** artifacts you've removed and
+refuses to clobber files it didn't create (use `--force` to override). The
+deployed skill is a *rendered, parameterized* copy of your source, not a raw
+file — the piece a plain installer can't do.
+
+## Reproducible setups
+
+`yori sync --save` records the chosen artifacts to a committed
+`.yori/sync.yaml`. A teammate then clones the repo and runs a bare `yori sync`
+to hydrate the project's whole agent setup in one command:
+
+```yaml
+# .yori/sync.yaml
+agents: [claude-code]
+artifacts: [researcher, triage]
+```

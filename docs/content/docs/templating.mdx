@@ -1,0 +1,87 @@
+---
+title: Templating
+description: Compose artifacts with Liquid — variables, partials, logic, and template inheritance.
+---
+
+Bodies are rendered with [Liquid](https://shopify.github.io/liquid/) —
+text-native, no HTML escaping.
+
+## Variables
+
+Variables are filled at call time, in this precedence (high → low):
+
+| source | example |
+|---|---|
+| CLI flag | `--tone=blunt` |
+| `--set` (for names that clash with reserved flags) | `--set file=README` |
+| `@file` injection (any value) | `--notes=@notes.md` |
+| piped stdin → `input` | `cat x.log \| yori run triage` |
+| frontmatter `vars.<name>.default` | `tone: { default: neutral }` |
+| *(blank)* | undefined renders empty |
+
+**Stdin** fills `{{ input }}`. If the template doesn't reference it, the piped
+text is appended to the end instead of dropped. `--file=PATH` is an alternative
+source for `{{ input }}`.
+
+```bash
+echo "log line" | yori run triage --tone=blunt
+yori run triage --tone=blunt --file=bug.log
+yori run summarize --notes=@release-notes.md
+```
+
+## Partials
+
+Share a block across prompts with `{% include %}`:
+
+```liquid
+{% include 'house-style' %}     {# loads store/partials/house-style.md #}
+```
+
+## Logic
+
+Liquid conditionals and loops work:
+
+```liquid
+{% if examples %}Examples:
+{% for e in examples %}- {{ e }}
+{% endfor %}{% endif %}
+```
+
+## Inheritance
+
+**Template inheritance (slots)** — a base defines overridable regions; a child
+`extends` it and fills them.
+
+```markdown
+# base.md
+You are an assistant.
+{% slot "guidelines" %}Be concise.{% endslot %}
+
+Task: {{ input }}
+```
+
+```markdown
+# verbose.md
+---
+name: verbose
+extends: base
+---
+{% fill "guidelines" %}Be verbose and cite your sources.{% endfill %}
+```
+
+Rendering `verbose` pours the fill into the base's slot; unfilled slots fall
+back to their default. Inheritance chains and is cycle-checked.
+
+## Inspecting composition
+
+Two commands trace the composition graph:
+
+```bash
+yori deps verbose          # what an artifact composes from (extends + includes)
+yori affected house-style  # which artifacts include/extend a partial (blast radius)
+```
+
+## Forgiving by design
+
+Undefined variables render blank and missing values fall back to frontmatter
+defaults — a half-filled prompt never hard-fails mid-pipeline.

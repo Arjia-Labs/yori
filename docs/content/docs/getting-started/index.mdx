@@ -1,0 +1,24 @@
+---
+title: Getting Started
+description: Install yori, init a store, scaffold your first artifact, and render it into a pipeline.
+---
+
+Getting up and running with yori takes about a minute. There's no daemon, no
+server, no account — just a single binary and a directory of markdown files.
+
+1. **[Install](/docs/getting-started/install)** the `yori` binary.
+2. **[Quickstart](/docs/getting-started/quickstart)** — `init`, `add`, and `run`
+   the core loop end-to-end.
+3. **[Concepts](/docs/concepts)** — once it works, learn the model: artifacts,
+   types, and the layered store.
+
+## The shape of the tool
+
+yori is a sharp Unix filter. It reads artifacts (markdown files) from a store,
+fills in their variables, resolves their composition (includes and slots), and
+writes the result to stdout. What you do with that text — pipe it to a model,
+save it, eval it — is up to you.
+
+```bash
+echo "stack trace…" | yori run triage --tone=blunt | claude
+```

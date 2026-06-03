@@ -1,0 +1,46 @@
+---
+title: FAQ
+description: What yori is, what it deliberately is not, and why.
+---
+
+## Does yori call an LLM?
+
+No. yori is a **pure renderer** — text in, text out. It produces the prompt and
+gets out of the way. You own the model invocation: pipe the output into
+`claude`, `llm`, or anything else.
+
+```bash
+cat bug.log | yori run triage | claude
+```
+
+## Is there a server or database?
+
+No. The store is just a directory of markdown files. There's no daemon, no
+service, no account. Versioning is your own git, and sharing is `git push` /
+`git clone`.
+
+## How is this different from a snippets folder?
+
+A folder gives you files; yori gives you **composition and resolution** on top of
+them: Liquid templating with variables, partials, and inheritance; a layered
+store (project → global → package) that resolves names with override semantics;
+and `yori sync`, which renders artifacts into the dirs your coding agent reads
+from.
+
+## What's the difference between a package install and an item install?
+
+A **package** install (`yori install <git-url>`) adds the whole repo as a
+read-only layer you resolve through. An **item** install
+(`yori install <reg> <item>`) copies a single artifact plus its dependency
+closure into your store as editable source you own. See
+[Registry](/docs/registry).
+
+## Why "yori"?
+
+Named after Tron's **Yori**, who ran the I/O Tower — the gateway where a User's
+words reached their program. yori is where the words you tell your AI live.
+
+## Does it phone home?
+
+No telemetry, ever. The only network use is `git`, and only when you run a
+registry command.

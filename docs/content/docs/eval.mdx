@@ -1,0 +1,40 @@
+---
+title: Evaluate with promptfoo
+description: yori export promptfoo turns a composed artifact and its cases into a ready-to-run promptfoo config.
+---
+
+yori is the source of truth for your prompts; for model-graded evaluation it
+hands off to [promptfoo](https://promptfoo.dev) rather than reinventing it.
+
+`yori export promptfoo <name>` resolves an artifact's composition (includes,
+slots) but leaves variables as `{{ placeholders }}`, and emits a ready-to-run
+config:
+
+```bash
+yori export promptfoo review > promptfooconfig.yaml
+promptfoo eval
+```
+
+## Test cases live next to the artifact
+
+Cases go in `<name>.cases.yaml` (or `cases.yaml` in a skill bundle) — a plain
+list of promptfoo test objects, so authoring yori cases *is* authoring promptfoo
+tests:
+
+```yaml
+# review.cases.yaml
+- description: flags a real bug
+  vars: { lang: go, input: "func f() int { }" }
+  assert:
+    - { type: contains, value: "return" }
+    - { type: llm-rubric, value: "explains the root cause" }
+```
+
+The provider comes from `--provider` or the artifact's `model:` hint.
+
+```bash
+yori export promptfoo review --provider openai:gpt-4o-mini
+yori export promptfoo pr-bot --type agent
+```
+
+yori *manages and ships* your prompts; promptfoo *grades* them.

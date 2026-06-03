@@ -1,0 +1,24 @@
+---
+title: Design notes
+description: The sticky decisions behind yori, and what's on the roadmap.
+---
+
+## Principles
+
+- **Pure renderer, by choice.** yori is a sharp Unix filter, not a model client.
+  No API keys, no SDKs, no opinions about which model you use — it just produces
+  the text and gets out of the way.
+- **Files are the source of truth.** No database, no lock-in. The store is a
+  directory of markdown you can read, grep, edit by hand, and commit. Versioning
+  is your own git.
+- **Git is the network.** Sharing reuses infrastructure everyone already has. A
+  package is just a repo; publishing is `git push`; installing is `git clone`.
+- **Forgiving rendering.** Undefined variables render blank and missing values
+  fall back to frontmatter defaults — a half-filled prompt never hard-fails
+  mid-pipeline.
+
+## Roadmap
+
+Out of scope today, but the file layout leaves room for: lightweight evals
+(regression-test a prompt across versions), a render-once → symlink-many sync
+mode for multi-agent setups, more agent targets, and richer namespacing.

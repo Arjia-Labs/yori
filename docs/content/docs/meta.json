@@ -1,0 +1,18 @@
+{
+  "title": "yori",
+  "pages": [
+    "index",
+    "---Get started---",
+    "getting-started",
+    "concepts",
+    "templating",
+    "---Share & deploy---",
+    "registry",
+    "sync",
+    "eval",
+    "---Reference---",
+    "commands",
+    "design",
+    "faq"
+  ]
+}

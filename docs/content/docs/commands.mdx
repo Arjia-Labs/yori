@@ -1,0 +1,49 @@
+---
+title: Command reference
+description: Every yori subcommand, what it does, and its key flags.
+---
+
+## Authoring
+
+| command | what it does |
+|---|---|
+| `yori init` | create a project store (`./.yori/store`) |
+| `yori add <name>` | scaffold a new artifact and open `$EDITOR` |
+| `yori edit <name>` | open an existing artifact in `$EDITOR` |
+| `yori get <name>` | print the **raw** body (no rendering) |
+| `yori run <name>` | **render** — fill variables, inject stdin, print to stdout |
+| `yori show <name>` | print metadata (type, layer, path, tags, vars) |
+| `yori ls` | list artifacts (all types; `--type`, `--tag`, `--global`) |
+| `yori which <name>` | print the resolved file path |
+| `yori deps <name>` | what an artifact composes from (extends + transitive includes) |
+| `yori affected <name>` | which artifacts include/extend a partial or base (blast radius) |
+| `yori rm <name>` | delete an artifact |
+
+## Registry & sharing
+
+| command | what it does |
+|---|---|
+| `yori install <reg> [items]` | install a package, or vendor items (`--auto`, `--tag`, `--all`, `--sync`, `--global`) |
+| `yori detect` | print the project stack `--auto` matches `when:` conditions against |
+| `yori publish` | build the manifest + commit + push the global store (`--remote`, `-m`) |
+| `yori registry build` | generate a `.yori.json` manifest from the store (`--out`, `--global`) |
+| `yori registry add/ls/rm` | manage registry aliases (use a short name with `install`/`view`) |
+| `yori view <reg> [item]` | browse a registry's items from its manifest, no clone (`--all`) |
+| `yori pkg ls` | list installed packages |
+| `yori update [name]` | pull + re-pin installed packages |
+| `yori uninstall <name>` | remove an installed package |
+| `yori push` | publish the global store to a git remote (`--remote`, `-m`) |
+
+## Deploy & evaluate
+
+| command | what it does |
+|---|---|
+| `yori sync [names]` | render skills + commands into an agent's dirs (`--agent`, `--global`, `--link`, `--set`, `--force`, `--save`) |
+| `yori unsync` | remove what `yori sync` placed (`--agent`, `--global`) |
+| `yori export promptfoo <name>` | generate a `promptfooconfig.yaml` for evaluation (`--provider`, `--type`) |
+
+## Shared flags
+
+- `--type` / `-t` — select the artifact type (`prompt`, `agent`, `command`,
+  `skill`, `rule`). Defaults to `prompt`.
+- `--global` — target `~/.yori` instead of the project store.

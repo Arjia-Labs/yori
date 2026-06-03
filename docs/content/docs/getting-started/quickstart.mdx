@@ -1,0 +1,57 @@
+---
+title: Quickstart
+description: Run the core yori loop end-to-end in under a minute.
+---
+
+```bash
+mkdir my-project && cd my-project
+yori init                                  # 📂 creates ./.yori/store
+
+yori add triage                            # ✍️  opens $EDITOR with a scaffold
+# ... write a prompt that uses {{ tone }} and {{ input }} ...
+
+yori ls                                     # 📋 list everything
+yori show triage                            # 🔎 metadata + declared variables
+
+echo "NullPointer at line 42" | yori run triage --tone=blunt          # 🎬 render to stdout
+echo "NullPointer at line 42" | yori run triage --tone=blunt | claude  # 🤝 pipe to your model
+```
+
+## A first artifact
+
+`yori add triage` scaffolds a `triage.md` you can edit. A finished one looks
+like this:
+
+```markdown
+---
+name: triage
+description: Triage a bug from a log
+tags: [debug, ops]
+vars:
+  tone:
+    default: neutral
+    description: voice of the response
+---
+{% include 'house-style' %}
+
+Analyze this log as a {{ tone }} engineer:
+
+{{ input }}
+```
+
+- **Frontmatter** declares the name, description, tags, and variables.
+- **`{% include 'house-style' %}`** pulls in a shared partial (see
+  [Templating](/docs/templating)).
+- **`{{ tone }}`** is filled by `--tone=…` at call time, falling back to the
+  `default`.
+- **`{{ input }}`** captures piped stdin.
+
+## What just happened
+
+1. `yori init` created a project store at `./.yori/store`.
+2. `yori add` scaffolded an artifact and opened your editor.
+3. `yori run` filled the variables, injected stdin into `{{ input }}`, and
+   printed the composed prompt — ready to pipe anywhere.
+
+Next: learn the [Concepts](/docs/concepts) behind artifacts and the layered
+store, or go deeper on [Templating](/docs/templating).

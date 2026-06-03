@@ -1,0 +1,62 @@
+---
+title: Concepts
+description: Artifacts, the five types, and the layered store that resolves them.
+---
+
+## Artifacts and types
+
+An **artifact** is one markdown file: YAML frontmatter (`name`, `description`,
+`tags`, `model`, `extends`, `vars`) plus a Liquid body. There are five types,
+each in its own subfolder of a store:
+
+| type | folder | what it is |
+|---|---|---|
+| `prompt` *(default)* | `store/` | a reusable prompt |
+| `agent` | `store/agents/` | a system prompt + role definition |
+| `command` | `store/commands/` | a slash-command body |
+| `skill` | `store/skills/` | a skill description |
+| `rule` | `store/rules/` | always-on / path-scoped instructions |
+
+Every command takes `--type`/`-t` (default `prompt`). `yori ls` shows all types
+by default with a `TYPE` column; `yori ls --type agent` filters.
+
+```bash
+yori add pr-bot --type agent
+yori run pr-bot -t agent --file=diff.patch
+yori ls --type command
+```
+
+## The layered store
+
+Artifacts resolve through layers, highest priority first:
+
+1. **Project** — `./.yori/store` (discovered by walking up from the working
+   directory, like `.git`).
+2. **Global** — `~/.yori/store`.
+3. **Installed packages** — `~/.yori/pkg/<name>` (read-only).
+
+A project artifact **shadows** a same-named global one, which shadows a package
+one. Address a package artifact explicitly as `<pkg>/<name>`. Most write
+commands take `--global` to target `~/.yori` instead of the project.
+
+```bash
+yori run review            # resolves project → global → package
+yori run acme/review       # force the package layer
+yori add note --global     # write to ~/.yori instead of ./.yori
+```
+
+Think of it as a search path for prompts: local overrides win, but you always
+fall through to shared defaults.
+
+## Frontmatter at a glance
+
+| field | meaning |
+|---|---|
+| `name` | the artifact's identifier (defaults to the filename) |
+| `description` | one-line summary shown by `yori ls` / `yori show` |
+| `tags` | free-form labels for `--tag` filtering and `sync --tag` |
+| `model` | a hint used as the default provider by `yori export` |
+| `extends` | the base artifact this one inherits slots from |
+| `vars` | declared variables, each with a `default` and `description` |
+| `when` | a [context condition](/docs/registry#context-aware) for `install --auto` |
+| `paths` | path globs a `rule` is scoped to (passed through to the agent) |

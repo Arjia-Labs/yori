@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: true
+  sharp: true
+peerDependencyRules:
+  allowedVersions:
+    '@fumadocs/ui>fumadocs-core': 16.9.x

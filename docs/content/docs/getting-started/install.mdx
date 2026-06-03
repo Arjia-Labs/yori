@@ -1,0 +1,36 @@
+---
+title: Install
+description: Install the yori CLI with go install or from a clone.
+---
+
+## With `go install`
+
+yori is a single, CGo-free Go binary (Go 1.26+):
+
+```bash
+go install github.com/arjia-labs/yori@latest
+```
+
+Add `$HOME/go/bin` to your `PATH`, then verify:
+
+```bash
+yori --help
+```
+
+## From a clone
+
+```bash
+git clone https://github.com/arjia-labs/yori
+cd yori
+go build -o yori . && ./yori --help
+```
+
+## Requirements
+
+- **Go 1.26+** to build (no CGo, no C toolchain needed).
+- An `$EDITOR` for `yori add` / `yori edit` (falls back to `vi`).
+- `git` on your `PATH` — only used by the [registry](/docs/registry) commands,
+  and only when you ask for them.
+
+yori makes no network calls of its own and stores nothing outside your store
+directories.

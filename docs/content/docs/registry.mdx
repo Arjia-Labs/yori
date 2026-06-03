@@ -1,0 +1,74 @@
+---
+title: Registry
+description: Share and install artifacts over git — whole packages, individual items, and context-aware installs.
+---
+
+yori treats a git repo whose root is a store as a shareable **package** — like
+Go modules for prompts. Transport is plain `git` shelled out; there's no server
+to run.
+
+## Packages
+
+```bash
+# Pull a team's shelf (shallow-cloned to ~/.yori/pkg/<name>, pinned to a commit)
+yori install https://github.com/acme/prompts --name acme
+yori pkg ls
+yori run acme/review                      # address it explicitly
+yori update acme                          # fast-forward + re-pin
+yori uninstall acme
+
+# Publish your own global store
+yori push --remote git@github.com:me/prompts.git -m "initial set"
+yori push                                 # subsequent pushes need no flags
+```
+
+Installed packages are **read-only layers**, so `yori run review` falls through
+to a package if nothing local matches.
+
+## Items
+
+`yori registry build` generates a `.yori.json` manifest — yori **infers** each
+item's files and dependencies from the composition graph (no hand-authoring).
+Then anyone can discover and install *individual* items, with their dependency
+closure, as editable source you own:
+
+```bash
+# Publish (one command: build .yori.json + commit + push the global store)
+yori publish --remote github.com/me/prompts
+
+# Consume — alias once, then a single fetch + vendor + deploy
+yori registry add acme github.com/me/prompts
+yori view acme                          # browse items (no clone for public GitHub)
+yori install acme pr-summary --sync     # vendor the item + its deps, then deploy
+```
+
+Unlike a whole-package install (a read-only layer), **per-item install** copies
+the item, the base it extends, and the partials it includes into your store as
+source. The manifest is auto-generated and agent-readable — an agent can read it
+to know exactly what a registry offers and how to compose it. Bare URLs work for
+public *and* private repos (https with an ssh fallback).
+
+## Context-aware install
+
+An item can declare a `when:` condition; `yori install --auto` reads your
+project's dependency manifests (`package.json`, `go.mod`, `pyproject.toml`,
+`Cargo.toml`, …) and installs only what applies. shadcn installs what you ask;
+**yori installs what your stack implies.**
+
+```markdown
+---
+name: nextjs-helper
+when: { deps: [next] }      # only relevant when `next` is a dependency
+tags: [frontend]
+---
+```
+
+```bash
+yori detect                          # see the stack yori detects
+yori install acme --auto             # everything applicable to this project
+yori install acme --tag frontend     # everything tagged frontend
+yori install acme --auto --tag frontend   # both: frontend items that fit the stack
+```
+
+So a single registry serves a Next.js app and a NestJS service differently —
+each gets the items its dependencies call for.
