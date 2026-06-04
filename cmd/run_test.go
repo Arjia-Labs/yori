@@ -40,3 +40,21 @@ func TestParseRunArgsVarsAndFile(t *testing.T) {
 		t.Errorf("file = %q", p.file)
 	}
 }
+
+func TestParseRunArgsJSON(t *testing.T) {
+	p, err := parseRunArgs([]string{"triage", "--json", "--tone=blunt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.json {
+		t.Error("--json not parsed")
+	}
+	if p.vars["tone"] != "blunt" {
+		t.Errorf("tone = %q", p.vars["tone"])
+	}
+	// Absent by default.
+	p2, _ := parseRunArgs([]string{"triage"})
+	if p2.json {
+		t.Error("json should default to false")
+	}
+}

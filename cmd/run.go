@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,10 @@ Variables come from (highest priority first):
   a @path value       reads file contents (e.g. --notes=@notes.md)
   piped stdin         bound to {{ input }} (or appended if not referenced)
   frontmatter default
+
+With --json, emit {"output","name","model","vars"} instead of raw text. The
+"output" key mirrors replicate's prediction schema, so a rendered prompt pipes
+straight into ` + "`replicate run model prompt={{.output}}`" + `.
 `,
 	DisableFlagParsing: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -75,6 +80,21 @@ Variables come from (highest priority first):
 		if err != nil {
 			return err
 		}
+		if p.json {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetEscapeHTML(false)
+			enc.SetIndent("", "  ")
+			// "output" mirrors replicate's prediction schema, so a rendered
+			// prompt pipes straight into `replicate run model prompt={{.output}}`.
+			// name/model/vars ride along for routing wrappers that pick a CLI
+			// from the artifact's model hint.
+			return enc.Encode(struct {
+				Output string         `json:"output"`
+				Name   string         `json:"name,omitempty"`
+				Model  string         `json:"model,omitempty"`
+				Vars   map[string]any `json:"vars,omitempty"`
+			}{Output: out, Name: art.Name, Model: art.Model, Vars: vars})
+		}
 		fmt.Print(out)
 		return nil
 	},
@@ -86,6 +106,7 @@ type runParams struct {
 	vars   map[string]string
 	file   string
 	global bool
+	json   bool
 }
 
 // parseRunArgs hand-parses run's args because variable flags are dynamic.
@@ -137,6 +158,9 @@ func parseRunArgs(args []string) (runParams, error) {
 			continue
 		case "global":
 			p.global = true
+			continue
+		case "json":
+			p.json = true
 			continue
 		case "file":
 			if !hasVal {
@@ -218,6 +242,7 @@ func init() {
 	// parseRunArgs, not by cobra.
 	runCmd.Flags().StringP("type", "t", "prompt", "artifact type: prompt|agent|command|skill|rule")
 	runCmd.Flags().Bool("global", false, "render the global artifact only")
+	runCmd.Flags().Bool("json", false, `emit JSON: {"output", "name", "model", "vars"} (output mirrors replicate's schema for {{.output}} piping)`)
 	runCmd.Flags().String("file", "", "read {{ input }} from a file")
 	runCmd.Flags().StringArray("set", nil, "set a variable (key=value), repeatable")
 	rootCmd.AddCommand(runCmd)

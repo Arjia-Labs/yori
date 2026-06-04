@@ -156,6 +156,16 @@ Bodies are rendered with [Liquid](https://shopify.github.io/liquid/) — text-na
 
 **Stdin** fills `{{ input }}`. If the template doesn't reference it, the piped text is appended to the end instead of dropped. `--file=PATH` is an alternative source for `{{ input }}`.
 
+**JSON output** — `--json` emits `{"output", "name", "model", "vars"}` instead of raw text. The `output` key mirrors the schema CLIs like [Replicate](https://github.com/replicate/cli) parse from stdin, so a rendered prompt pipes straight into a `{{.output}}` template — no command substitution:
+
+```bash
+yori run sdxl-prompt --style=studio --json \
+  | replicate run stability-ai/sdxl prompt={{.output}} \
+  | replicate run nightmareai/real-esrgan --web image={{.output[0]}}
+```
+
+`name`/`model`/`vars` ride along so a wrapper can route to a provider from the artifact's `model:` hint.
+
 **Partials** — share a block across prompts:
 
 ```liquid
@@ -324,7 +334,7 @@ The provider comes from `--provider` or the artifact's `model:` hint. yori *mana
 | `yori add <name>` | scaffold a new artifact and open `$EDITOR` |
 | `yori edit <name>` | open an existing artifact in `$EDITOR` |
 | `yori get <name>` | print the **raw** body (no rendering) |
-| `yori run <name>` | **render** — fill variables, inject stdin, print to stdout |
+| `yori run <name>` | **render** — fill variables, inject stdin, print to stdout (`--file`, `--set`, `--json`, `--global`) |
 | `yori show <name>` | print metadata (type, layer, path, tags, vars) |
 | `yori ls` | list artifacts (all types; `--type`, `--tag`, `--global`) |
 | `yori which <name>` | print the resolved file path |
